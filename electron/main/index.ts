@@ -29,6 +29,18 @@ import { createHash } from 'node:crypto'
 import { resolveStoredImage } from './imageProtocol'
 import { getThumbnailPayload, thumbnailCacheControl } from './thumbnailCache'
 
+// Packaged builds (AppImage/deb launchers, systemd, etc.) often don't keep a
+// console attached, so stdout/stderr can be a pipe that gets closed out from
+// under us at any time. Without this guard, the next console.log/error after
+// that happens throws an uncaught EPIPE and takes the whole app down — this
+// is the "Error: write EPIPE ... at console.log" crash dialog.
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EPIPE') throw err
+})
+process.stderr.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EPIPE') throw err
+})
+
 // Edge-Drop renders a small, mostly static transparent panel. Chromium's GPU
 // process costs substantially more memory (~150–250 MB) than the iGPU compositing
 // savings are worth for such a simple UI. Software compositing keeps the process
