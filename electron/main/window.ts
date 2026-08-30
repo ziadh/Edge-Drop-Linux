@@ -24,6 +24,7 @@ import { WorkAreaCache } from './workAreaCache'
 import { probeSeamAware, isNearProximity, type SeamTickState } from './stickProbe'
 import { loadSettings, saveSettings } from '../store/settings'
 import { isFullscreenAppActive, registerFullscreenActiveListener } from './fullscreen'
+import { getX11CursorPoint } from '../platform/linuxCursor'
 
 type RegisterWindowMessageFn = (lpString: string) => number
 type SetWindowLongPtrFn = (hWnd: number | bigint, nIndex: number, dwNewLong: number | bigint) => number | bigint
@@ -281,7 +282,11 @@ function _pollTick(): void {
   const settings = loadSettings()
   if (settings.suppressInFullscreen && isFullscreenAppActive()) return
 
-  const pt = screen.getCursorScreenPoint()
+  // On Linux/X11, Electron's screen.getCursorScreenPoint() has been observed to
+  // freeze on some NVIDIA + Ozone/X11 setups instead of live-polling the pointer
+  // (see linuxCursor.ts). Prefer a direct XQueryPointer call there and only fall
+  // back to Electron's API if libX11 couldn't be loaded/opened.
+  const pt = (process.platform === 'linux' ? getX11CursorPoint() : null) ?? screen.getCursorScreenPoint()
 
   // Versioned read: rebuilds automatically whenever the stick display id
   // changed (Settings/tray switch, re-resolution after topology events).

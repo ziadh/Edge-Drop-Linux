@@ -41,6 +41,14 @@ process.stderr.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code !== 'EPIPE') throw err
 })
 
+// On Linux, Chromium's default Ozone backend can leave screen.getCursorScreenPoint()
+// stuck reporting a stale position instead of live-polling the pointer (this is what
+// the edge-hover cursor poll relies on). Forcing the classic X11 Ozone backend fixes
+// live tracking on X11 sessions. Must be set before the 'ready' event.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform-hint', 'x11')
+}
+
 // Edge-Drop renders a small, mostly static transparent panel. Chromium's GPU
 // process costs substantially more memory (~150–250 MB) than the iGPU compositing
 // savings are worth for such a simple UI. Software compositing keeps the process
