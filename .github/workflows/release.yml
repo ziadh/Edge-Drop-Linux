@@ -87,11 +87,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update release notes
+      - name: Finalize release
         shell: bash
         run: |
+          # electron-builder's --publish always creates the GitHub release as a
+          # draft by default (meant for multi-platform matrix builds that
+          # accumulate artifacts across several jobs before one final publish
+          # step). We only have this one Linux job, so nothing else will ever
+          # un-draft it -- do that here, along with setting the real notes.
           printf '%s\n' "$RELEASE_NOTES" > /tmp/release-notes.md
-          gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/release-notes.md
+          gh release edit "$GITHUB_REF_NAME" --draft=false --notes-file /tmp/release-notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES: ${{ steps.notes.outputs.RELEASE_NOTES }}
