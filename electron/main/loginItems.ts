@@ -38,6 +38,17 @@ function desktopExecArg(value: string): string {
   return `"${value.replace(/(["\\`$])/g, '\\$1')}"`
 }
 
+/**
+ * AppImage mounts itself to a temp squashfs path (/tmp/.mount_XXXX/...) and
+ * app.getPath('exe') resolves inside that mount, which is torn down when the
+ * process exits. $APPIMAGE is set by the AppImage runtime to the real, stable
+ * path of the .AppImage file itself, so autostart entries stay valid across
+ * reboots. Falls back to app.getPath('exe') for the deb build / dev.
+ */
+export function linuxExecPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.APPIMAGE || app.getPath('exe')
+}
+
 export function buildLinuxAutostartEntry(exePath: string): string {
   return [
     '[Desktop Entry]',
@@ -68,7 +79,7 @@ function applyLinuxLaunchAtLogin(wantLaunch: boolean): LaunchAtLoginResult {
   try {
     if (wantLaunch) {
       mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, buildLinuxAutostartEntry(app.getPath('exe')), { encoding: 'utf8', mode: 0o644 })
+      writeFileSync(path, buildLinuxAutostartEntry(linuxExecPath()), { encoding: 'utf8', mode: 0o644 })
     } else {
       rmSync(path, { force: true })
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDesktopCapabilities, getDesktopSession } from '../electron/platform/desktop'
 import { encodeGnomeCopiedFiles, encodeUriList, parseGnomeCopiedFiles, parseUriList } from '../electron/platform/linuxClipboard'
-import { buildLinuxAutostartEntry, getLinuxAutostartPath } from '../electron/main/loginItems'
+import { buildLinuxAutostartEntry, getLinuxAutostartPath, linuxExecPath } from '../electron/main/loginItems'
 
 describe('Linux desktop capabilities', () => {
   it('selects practical X11 capabilities', () => {
@@ -38,5 +38,10 @@ describe('XDG autostart', () => {
   it('uses XDG_CONFIG_HOME and safely quotes the executable', () => {
     expect(getLinuxAutostartPath({ XDG_CONFIG_HOME: '/tmp/config' })).toBe('/tmp/config/autostart/edge-drop.desktop')
     expect(buildLinuxAutostartEntry('/opt/Edge Drop/edge-drop')).toContain('Exec="/opt/Edge Drop/edge-drop" --hidden')
+  })
+
+  it('prefers $APPIMAGE over the mounted exe path so entries survive unmount', () => {
+    expect(linuxExecPath({ APPIMAGE: '/home/alice/Downloads/Edge-Drop-1.0.0.AppImage' }))
+      .toBe('/home/alice/Downloads/Edge-Drop-1.0.0.AppImage')
   })
 })
