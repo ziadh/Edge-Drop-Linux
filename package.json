@@ -2,7 +2,11 @@
   "name": "edge-drop",
   "version": "0.3.0",
   "description": "Edge-Drop — a clipboard manager that lives on the left edge of your screen and expands on hover.",
-  "author": "Edge-Drop",
+  "author": {
+    "name": "Edge-Drop",
+    "email": "yadavdeepender65@gmail.com"
+  },
+  "desktopName": "Edge-Drop",
   "license": "Apache-2.0",
   "private": true,
   "main": "out/main/index.js",
@@ -14,6 +18,7 @@
     "build:store": "npm run build && electron-builder --win appx -c.extraMetadata.buildTarget=store",
     "build:msix": "npm run build && electron-builder --win appx -c.extraMetadata.buildTarget=store",
     "build:win": "npm run build:github",
+    "build:linux": "npm run build && electron-builder --linux AppImage deb --x64",
     "package": "npm run build:github",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -34,12 +39,6 @@
       "!resources/startup/**/*.exe",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "resources/startup/EdgeDropStartup.exe",
-        "to": "startup/EdgeDropStartup.exe"
-      }
-    ],
     "asarUnpack": [
       "**/*.{node,dll}",
       "**/node_modules/koffi/**/*",
@@ -52,6 +51,12 @@
       "repo": "Edge-Drop"
     },
     "win": {
+      "extraResources": [
+        {
+          "from": "resources/startup/EdgeDropStartup.exe",
+          "to": "startup/EdgeDropStartup.exe"
+        }
+      ],
       "target": [
         {
           "target": "nsis",
@@ -67,6 +72,14 @@
         }
       ],
       "icon": "resources/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "syncDesktopName": true,
+      "icon": "resources/icon.png",
+      "artifactName": "Edge-Drop-${version}-${arch}.${ext}",
+      "executableName": "edge-drop"
     },
     "nsis": {
       "oneClick": false,

@@ -66,6 +66,7 @@ import { syncLoginItemSettings } from '../electron/main/ipc'
 
 describe('GitHub exe launch-at-login (orphan Run keys)', () => {
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     delete process.env.APP_BUILD_TARGET
     mocks.isPackaged = true
     mocks.setLoginItemSettings.mockReset()
@@ -78,6 +79,7 @@ describe('GitHub exe launch-at-login (orphan Run keys)', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     delete process.env.APP_BUILD_TARGET
   })
 

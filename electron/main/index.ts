@@ -19,6 +19,7 @@ import { isStoreBuild } from './config'
 import { prewarmDragIcons } from './drag'
 import { initState, getWatcher, loadSettings, saveSettings, pushState, stopStateTimers, getStore } from './state'
 import { initAutoUpdater } from './updater'
+import { getDesktopCapabilities } from '../platform/desktop'
 import { createOnboardingWindow } from './onboardingWindow'
 import { startFullscreenMonitor, stopFullscreenMonitor, triggerFullscreenCheck } from './fullscreen'
 import { flushStagedTempRegistry } from './stagedTemp'
@@ -110,8 +111,9 @@ app.whenReady().then(() => {
   registerImageProtocol()
 
   createWindow()
-  startCursorPoll()
-  startFullscreenMonitor()
+  const capabilities = getDesktopCapabilities()
+  if (capabilities.edgeActivation) startCursorPoll()
+  if (capabilities.fullscreenDetection) startFullscreenMonitor()
   createTray()
   registerTaskbarCreatedListener(refreshTray)
 
@@ -138,7 +140,7 @@ app.whenReady().then(() => {
   void reconcileLaunchAtLoginOnStartup().then((reconciled) => {
     pushState.settings(reconciled)
   }).catch((err) => {
-    console.error('[Main] Failed to reconcile launch-at-login with Windows:', err)
+    console.error('[Main] Failed to reconcile launch-at-login with the desktop:', err)
   })
   registerIncognitoApplier((v) => getWatcher().setPaused(v))
   getWatcher().setPaused(settings.incognito)

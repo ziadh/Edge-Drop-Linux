@@ -10,7 +10,7 @@ import type { DragRequest } from './types'
 
 export interface EdgeApi {
   /* Renderer -> Main */
-  loadState: () => Promise<{ items: import('./types').ClipboardItemDto[]; settings: Settings; version: string; isStoreBuild?: boolean }>
+  loadState: () => Promise<{ items: import('./types').ClipboardItemDto[]; settings: Settings; version: string; isStoreBuild?: boolean; capabilities: import('./types').DesktopCapabilities }>
   setPinned: (id: string, pinned: boolean) => Promise<import('./types').ClipboardItemDto[]>
   deleteItem: (id: string) => Promise<import('./types').ClipboardItemDto[]>
   deleteBatchItems: (ids: string[]) => Promise<import('./types').ClipboardItemDto[]>

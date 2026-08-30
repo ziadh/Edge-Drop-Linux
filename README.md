@@ -221,7 +221,7 @@ A huge thank you to the incredible sponsors and products actively sponsoring Edg
 
 ### Prerequisites
 - **Node.js** v18 or higher
-- **OS**: Windows 10/11 (uses Win32 OLE drag pipelines and transparent-window cursor polling)
+- **OS**: Windows 10/11, or x64 Linux (Ubuntu/Debian-family desktop recommended)
 
 ### Run from source
 ```bash
@@ -244,6 +244,23 @@ npm run build:store  # outputs an MSIX .appx for Microsoft Store submission
 
 > [!NOTE]
 > On Windows, if packaging fails with `EBUSY: resource busy or locked`, close any running Edge-Drop instances first: `taskkill /F /IM electron.exe /T`.
+
+### Linux support
+
+```bash
+npm run build:linux   # outputs x64 AppImage and .deb artifacts in dist/
+```
+
+Core clipboard history, text/HTML/images, Linux file URI lists, drag-out, tray,
+global shortcuts, and XDG launch-at-login are supported. X11 also supports edge
+activation and optional click-to-paste when `xdotool` is installed. Wayland
+intentionally uses the global shortcut or tray to open the shelf because most
+compositors prohibit global pointer inspection and synthetic keystrokes; item
+clicks copy to the clipboard instead of silently attempting auto-paste.
+
+Typical Debian/Ubuntu runtime libraries are GTK 3, NSS, libnotify, libXtst,
+XDG utilities, and a system tray/AppIndicator implementation. Install `xdotool`
+only if X11 automatic paste is desired.
 
 ---
 

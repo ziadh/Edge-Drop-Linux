@@ -27,6 +27,7 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
   const updateInfo = useStore((s) => s.updateInfo)
   const isStoreBuild = useStore((s) => s.isStoreBuild)
   const currentVersion = useStore((s) => s.currentVersion)
+  const capabilities = useStore((s) => s.capabilities)
   const styleFlyoutOpen = useStore((s) => s.styleFlyoutOpen)
   const setStyleFlyoutOpen = useStore((s) => s.setStyleFlyoutOpen)
   const settingsSubView = useStore((s) => s.settingsSubView)
@@ -328,13 +329,14 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
 
                   <div className="setting-divider" />
 
-                  <div className="setting-row">
+                  <div className="setting-row" style={{ opacity: capabilities.launchAtLogin ? 1 : 0.45 }}>
                     <div className="setting-info">
                       <div className="setting-title">{t('behaviour.launchAtLoginTitle')}</div>
-                      <div className="setting-desc">{t('behaviour.launchAtLoginDesc')}</div>
+                      <div className="setting-desc">{capabilities.launchAtLogin ? t('behaviour.launchAtLoginDesc') : 'Launch at login is unavailable on this desktop.'}</div>
                     </div>
                     <Toggle
                       checked={settings.launchAtLogin}
+                      disabled={!capabilities.launchAtLogin}
                       onChange={(v) => {
                         useStore.setState((s) => ({
                           settings: { ...s.settings, launchAtLogin: v }
@@ -346,7 +348,7 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
 
                   <div className="setting-divider" />
 
-                  <div className="setting-row">
+                  <div className="setting-row" style={{ opacity: capabilities.edgeActivation ? 1 : 0.45 }}>
                     <div className="setting-info">
                       <div className="setting-title">{t('behaviour.incognitoTitle')}</div>
                       <div className="setting-desc">{t('behaviour.incognitoDesc')}</div>
@@ -363,7 +365,9 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
                     <div className="setting-info">
                       <div className="setting-title">{t('behaviour.hoverActivationTitle')}</div>
                       <div className="setting-desc" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 5px', marginTop: 2 }}>
-                        {(settings.hoverActivation ?? true) ? (
+                        {!capabilities.edgeActivation ? (
+                          <span>Wayland restricts global edge detection. Use {settings.toggleHotkey || 'Alt+C'} or the tray instead.</span>
+                        ) : (settings.hoverActivation ?? true) ? (
                           <span>{t('behaviour.hoverActivationDescOn')}</span>
                         ) : (
                           <span>{t('behaviour.hoverActivationDescOff', { shortcut: settings.toggleHotkey || 'Alt+C' })}</span>
@@ -371,7 +375,8 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
                       </div>
                     </div>
                     <Toggle
-                      checked={settings.hoverActivation ?? true}
+                      checked={capabilities.edgeActivation && (settings.hoverActivation ?? true)}
+                      disabled={!capabilities.edgeActivation}
                       onChange={(v) => {
                         if (!v) {
                           patch({ hoverActivation: false, suppressInFullscreen: false })
@@ -410,19 +415,21 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
 
                   <div className="setting-divider" />
 
-                  <div className="setting-row" style={{ opacity: (settings.hoverActivation ?? true) ? 1 : 0.45, transition: 'opacity 0.2s ease' }}>
+                  <div className="setting-row" style={{ opacity: capabilities.fullscreenDetection && (settings.hoverActivation ?? true) ? 1 : 0.45, transition: 'opacity 0.2s ease' }}>
                     <div className="setting-info">
                       <div className="setting-title">{t('behaviour.fullscreenProtectionTitle')}</div>
                       <div className="setting-desc">
-                        {(settings.hoverActivation ?? true)
+                        {!capabilities.fullscreenDetection
+                          ? 'Fullscreen suppression is unavailable on this desktop session.'
+                          : (settings.hoverActivation ?? true)
                           ? t('behaviour.fullscreenProtectionDesc')
                           : t('behaviour.disabledHoverOff')}
                       </div>
                     </div>
                     <Toggle
-                      checked={(settings.hoverActivation ?? true) ? settings.suppressInFullscreen : false}
-                      onChange={(v) => (settings.hoverActivation ?? true) && patch({ suppressInFullscreen: v })}
-                      disabled={!(settings.hoverActivation ?? true)}
+                      checked={capabilities.fullscreenDetection && (settings.hoverActivation ?? true) ? settings.suppressInFullscreen : false}
+                      onChange={(v) => capabilities.fullscreenDetection && (settings.hoverActivation ?? true) && patch({ suppressInFullscreen: v })}
+                      disabled={!capabilities.fullscreenDetection || !(settings.hoverActivation ?? true)}
                     />
                   </div>
 

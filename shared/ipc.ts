@@ -9,7 +9,7 @@
  *   - `Renderer -> Main` calls (invoke/handle) are listed in `InvokeMap`.
  *   - `Main -> Renderer` events (send/on) are listed in `EventMap`.
  */
-import type { ClipboardItemDto, DragRequest, MergeResult, Settings } from './types'
+import type { ClipboardItemDto, DesktopCapabilities, DragRequest, MergeResult, Settings } from './types'
 
 /* ------------------------------------------------------------------ */
 /* Renderer -> Main  (ipcMain.handle / ipcRenderer.invoke)            */
@@ -17,7 +17,7 @@ import type { ClipboardItemDto, DragRequest, MergeResult, Settings } from './typ
 
 export interface InvokeMap {
   /** Returns the full current item list + settings on startup. */
-  'state:load': { args: []; result: { items: ClipboardItemDto[]; settings: Settings; version: string; isStoreBuild?: boolean } }
+  'state:load': { args: []; result: { items: ClipboardItemDto[]; settings: Settings; version: string; isStoreBuild?: boolean; capabilities: DesktopCapabilities } }
 
   /** Set an item's pinned state. */
   'item:set-pinned': { args: [id: string, pinned: boolean]; result: ClipboardItemDto[] }

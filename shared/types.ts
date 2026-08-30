@@ -79,6 +79,23 @@ export type ItemSection = 'pinned' | 'shelf'
 
 export type StickPosition = 'left' | 'right'
 
+export interface DesktopCapabilities {
+  platform: 'windows' | 'linux' | 'unsupported'
+  session: 'windows' | 'linux-x11' | 'linux-wayland' | 'unsupported'
+  edgeActivation: boolean
+  autoPaste: boolean
+  fileClipboard: boolean
+  multiFileDrag: boolean
+  fullscreenDetection: boolean
+  launchAtLogin: boolean
+}
+
+export interface PlatformOperationResult {
+  supported: boolean
+  ok: boolean
+  error?: string
+}
+
 export interface DisplayInfo {
   id: number
   bounds: { x: number; y: number; width: number; height: number }
@@ -222,5 +239,4 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'system',
   toggleHotkey: 'Alt+C'
 }
-
 

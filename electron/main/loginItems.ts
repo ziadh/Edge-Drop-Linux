@@ -14,6 +14,9 @@ import { isStoreBuild } from './config'
 import { loadSettings, saveSettings } from '../store/settings'
 import type { Settings } from '../../shared/types'
 import { disable, enable, getStatus, StartupTaskState } from './storeStartup'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 
 export { StartupTaskState }
 
@@ -25,6 +28,56 @@ export const GITHUB_LOGIN_ITEM_NAMES = [
 ] as const
 
 export const CANONICAL_LOGIN_ITEM_NAME = 'Edge-Drop'
+
+export function getLinuxAutostartPath(env: NodeJS.ProcessEnv = process.env): string {
+  const configHome = env.XDG_CONFIG_HOME || join(homedir(), '.config')
+  return join(configHome, 'autostart', 'edge-drop.desktop')
+}
+
+function desktopExecArg(value: string): string {
+  return `"${value.replace(/(["\\`$])/g, '\\$1')}"`
+}
+
+export function buildLinuxAutostartEntry(exePath: string): string {
+  return [
+    '[Desktop Entry]',
+    'Type=Application',
+    'Name=Edge-Drop',
+    `Exec=${desktopExecArg(exePath)} --hidden`,
+    'Terminal=false',
+    'X-GNOME-Autostart-enabled=true',
+    'StartupNotify=false',
+    ''
+  ].join('\n')
+}
+
+function readLinuxLaunchAtLogin(): LaunchAtLoginResult {
+  const path = getLinuxAutostartPath()
+  if (!existsSync(path)) return { enabled: false, blockedByUser: false, ok: true }
+  try {
+    const content = readFileSync(path, 'utf8')
+    const enabled = !/^Hidden=true$/mi.test(content) && !/^X-GNOME-Autostart-enabled=false$/mi.test(content)
+    return { enabled, blockedByUser: false, ok: true }
+  } catch {
+    return { enabled: false, blockedByUser: false, ok: false }
+  }
+}
+
+function applyLinuxLaunchAtLogin(wantLaunch: boolean): LaunchAtLoginResult {
+  const path = getLinuxAutostartPath()
+  try {
+    if (wantLaunch) {
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, buildLinuxAutostartEntry(app.getPath('exe')), { encoding: 'utf8', mode: 0o644 })
+    } else {
+      rmSync(path, { force: true })
+    }
+    return { enabled: wantLaunch, blockedByUser: false, ok: true }
+  } catch (err) {
+    console.error('[LoginItems] XDG autostart update failed:', err)
+    return { enabled: !wantLaunch, blockedByUser: false, ok: false }
+  }
+}
 
 export interface LaunchAtLoginResult {
   enabled: boolean
@@ -138,6 +191,7 @@ export async function readLaunchAtLogin(): Promise<LaunchAtLoginResult> {
   if (isStoreBuild()) {
     return resultFromState(await getStatus())
   }
+  if (process.platform === 'linux') return readLinuxLaunchAtLogin()
   return readGithubLaunchAtLogin()
 }
 
@@ -158,6 +212,7 @@ export async function applyLaunchAtLogin(wantLaunch: boolean): Promise<LaunchAtL
         return { enabled: !wantLaunch, blockedByUser: false, ok: false }
       }
     }
+    if (process.platform === 'linux') return applyLinuxLaunchAtLogin(wantLaunch)
     try {
       const result = applyGithubLaunchAtLogin(wantLaunch)
       if (wantLaunch) return result
@@ -190,7 +245,7 @@ export async function reconcileLaunchAtLoginOnStartup(): Promise<Settings> {
     return saveSettings({ launchAtLogin: false })
   }
 
-  if (settings.launchAtLogin && os.enabled && !isStoreBuild()) {
+  if (settings.launchAtLogin && os.enabled && !isStoreBuild() && process.platform === 'win32') {
     applyGithubLaunchAtLogin(true)
   }
 

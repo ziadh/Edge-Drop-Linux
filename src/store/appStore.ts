@@ -8,7 +8,7 @@
  */
 import { create } from 'zustand'
 import { edge } from '../lib/edge'
-import type { ClipboardItemDto, Settings, DragRequest } from '../../shared/types'
+import type { ClipboardItemDto, DesktopCapabilities, Settings, DragRequest } from '../../shared/types'
 import { DEFAULT_SETTINGS } from '../../shared/types'
 
 let flareTimer: ReturnType<typeof setTimeout> | null = null
@@ -52,6 +52,7 @@ interface AppState {
   tutorialStep: number
   currentVersion: string
   isStoreBuild: boolean
+  capabilities: DesktopCapabilities
   updateInfo: { hasUpdate: boolean; latestVersion: string; downloaded: boolean } | null
   /** Item ID currently being previewed in the flyout. */
   previewItemId: string | null
@@ -142,6 +143,11 @@ export const useStore = create<AppState>((set, get) => ({
   tutorialStep: 0,
   currentVersion: '',
   isStoreBuild: false,
+  capabilities: {
+    platform: 'unsupported', session: 'unsupported', edgeActivation: false,
+    autoPaste: false, fileClipboard: false, multiFileDrag: false,
+    fullscreenDetection: false, launchAtLogin: false
+  },
   updateInfo: null,
   previewItemId: null,
   previewItemRect: null,
@@ -172,12 +178,13 @@ export const useStore = create<AppState>((set, get) => ({
   flareKey: 0,
 
   async hydrate() {
-    const { items, settings, version, isStoreBuild } = await edge.loadState()
+    const { items, settings, version, isStoreBuild, capabilities } = await edge.loadState()
     set({ 
       items, 
       settings, 
       currentVersion: version,
       isStoreBuild: isStoreBuild ?? false,
+      capabilities,
       hydrated: true
     })
     edge.onCopyFlare(() => {

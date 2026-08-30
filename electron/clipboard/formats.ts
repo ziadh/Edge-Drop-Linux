@@ -12,6 +12,7 @@ import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import koffi from 'koffi'
 import type { ClipboardImageSource, ItemData } from '../../shared/types'
+import { parseGnomeCopiedFiles, parseUriList } from '../platform/linuxClipboard'
 
 let getSeqNum: (() => number) | null = null
 if (process.platform === 'win32') {
@@ -53,6 +54,17 @@ export const CF_FILE_LIST = 'FileNameW'
  */
 async function readFileListAsync(): Promise<string[] | null> {
   try {
+    if (process.platform === 'linux') {
+      for (const format of ['x-special/gnome-copied-files', 'text/uri-list']) {
+        const buf = clipboard.readBuffer(format)
+        if (!buf?.length) continue
+        const paths = format === 'x-special/gnome-copied-files'
+          ? parseGnomeCopiedFiles(buf.toString('utf8')).paths
+          : parseUriList(buf.toString('utf8'))
+        const valid = filterValidPaths(paths)
+        if (valid.length) return valid
+      }
+    }
     // First, confirm there is actually a file list on the clipboard before
     // spawning a process.  FileNameW being present is sufficient signal.
     const buf = clipboard.readBuffer(CF_FILE_LIST)
@@ -97,6 +109,16 @@ async function readFileListAsync(): Promise<string[] | null> {
 /** Fast, non-blocking check of FileNameW contents for clipboard signatures. */
 function readFileListFast(): string[] | null {
   try {
+    if (process.platform === 'linux') {
+      for (const format of ['x-special/gnome-copied-files', 'text/uri-list']) {
+        const buf = clipboard.readBuffer(format)
+        if (!buf?.length) continue
+        const paths = format === 'x-special/gnome-copied-files'
+          ? parseGnomeCopiedFiles(buf.toString('utf8')).paths
+          : parseUriList(buf.toString('utf8'))
+        if (paths.length) return paths
+      }
+    }
     const buf = clipboard.readBuffer(CF_FILE_LIST)
     if (!buf || buf.length < 4) return null
     const wide = buf.toString('utf16le')

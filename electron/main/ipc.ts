@@ -24,6 +24,8 @@ import { createId } from '../store/ids'
 import { isStoreBuild } from './config'
 import { applyLaunchAtLogin, refreshLaunchAtLoginFromOs } from './loginItems'
 import { toUnpackagedFilePath, toUnpackagedFilePaths } from '../store/paths'
+import { encodeGnomeCopiedFiles, encodeUriList } from '../platform/linuxClipboard'
+import { getDesktopCapabilities, simulatePlatformPaste } from '../platform/desktop'
 
 export { isStoreBuild }
 
@@ -65,7 +67,11 @@ function simulatePaste(): void {
           if (fallbackErr) console.error('[Main] simulatePaste fallback error:', fallbackErr)
         })
       })
+    return
   }
+  void simulatePlatformPaste().then((result) => {
+    if (!result.ok && result.error) toast(result.error, 'info')
+  })
 }
 
 /**
@@ -100,6 +106,22 @@ async function writeFileListToClipboard(rawPaths: string[]): Promise<boolean> {
       return true
     } catch (err) {
       console.error('[ipc] writeFileListToClipboard PowerShell failed, using text fallback:', err)
+    }
+  }
+  if (process.platform === 'linux') {
+    // Electron exposes arbitrary Linux clipboard targets through writeBuffer.
+    // GNOME/Nautilus prefer their action-prefixed target; other file managers
+    // understand the standard URI list.
+    const isGnome = /gnome|unity|cinnamon/i.test(process.env.XDG_CURRENT_DESKTOP || '')
+    const format = isGnome ? 'x-special/gnome-copied-files' : 'text/uri-list'
+    const payload = isGnome ? encodeGnomeCopiedFiles(validPaths) : encodeUriList(validPaths)
+    try {
+      clipboard.clear()
+      clipboard.writeBuffer(format, Buffer.from(payload, 'utf8'))
+      return true
+    } catch (err) {
+      console.error('[ipc] Linux file clipboard write failed:', err)
+      return false
     }
   }
   // Non-Windows / PowerShell failure fallback: plain text paths (best-effort)
@@ -188,7 +210,8 @@ export function registerIpc(): void {
       items: getStore().toDto(),
       settings: loadSettings(),
       version: app.getVersion(),
-      isStoreBuild: isStoreBuild()
+      isStoreBuild: isStoreBuild(),
+      capabilities: getDesktopCapabilities()
     }
   })
 
@@ -419,10 +442,13 @@ export function registerIpc(): void {
         getStore().touch(id)
       }
 
-      // 4. Simulate Ctrl+V after 50ms
-      setTimeout(() => {
-        simulatePaste()
-      }, 50)
+      // 4. Simulate Ctrl+V when the desktop session permits it. Restricted
+      // Wayland sessions intentionally degrade to a normal clipboard copy.
+      if (getDesktopCapabilities().autoPaste) {
+        setTimeout(() => simulatePaste(), 50)
+      } else {
+        toast('Copied. Automatic paste is unavailable in this Wayland session.', 'info')
+      }
 
       // 5. Broadcast updated items list after panel has fully closed off-screen (250ms)
       if (settings.movePastedToTop !== false) {
@@ -478,10 +504,11 @@ export function registerIpc(): void {
       // Pass false to explicitly close and avoid toggle race conditions.
       pushState.togglePanel(false)
 
-      // Wait 50ms for layout updates, then simulate Ctrl+V
-      setTimeout(() => {
-        simulatePaste()
-      }, 50)
+      if (getDesktopCapabilities().autoPaste) {
+        setTimeout(() => simulatePaste(), 50)
+      } else {
+        toast('Copied. Automatic paste is unavailable in this Wayland session.', 'info')
+      }
     } finally {
       setTimeout(() => {
         watcher.invalidateSignature()
@@ -621,7 +648,9 @@ export function registerIpc(): void {
         next = saveSettings({ launchAtLogin: applied.enabled })
       }
       if (applied.blockedByUser && patch.launchAtLogin) {
-        toast('Windows blocked launch at login. Enable Edge-Drop in Settings → Apps → Startup.', 'info')
+        toast(process.platform === 'win32'
+          ? 'Windows blocked launch at login. Enable Edge-Drop in Settings → Apps → Startup.'
+          : 'Your desktop blocked launch at login. Check the XDG autostart settings.', 'info')
       } else if (!applied.ok) {
         toast('Could not update launch at login.', 'error')
       }
@@ -819,6 +848,10 @@ export async function writeItemToClipboard(data: ItemData, capturedAt?: number):
       if (!firstSrc) {
         // No bitmap recoverable — the surviving named file references are
         // still perfectly valid for Explorer-style targets.
+        return writeFileListToClipboard(stagedFiles)
+      }
+
+      if (process.platform !== 'win32') {
         return writeFileListToClipboard(stagedFiles)
       }
 
@@ -1199,5 +1232,3 @@ setTimeout(() => {
     console.log('[IPC] Automatic updates disabled by setting; using bundled static release notes.')
   }
 }, 3000)
-
-
