@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-linux:
+    runs-on: [self-hosted, Linux, X64, edge-drop-linux]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # electron-builder 26 resolves @electron/rebuild 4, which requires
+          # Node >=22.12. Keep this explicit so dependency installs do not
+          # silently run on an unsupported release runtime.
+          node-version: "22.12.0"
+          # No cache: input here, and no actions/cache step for the Electron
+          # binary cache either. This runner is a persistent self-hosted box,
+          # not an ephemeral GitHub-hosted VM -- ~/.npm, ~/.cache/electron,
+          # and ~/.cache/electron-builder already survive between runs on
+          # disk. Round-tripping them through GitHub's remote cache service
+          # was pure overhead and, on this runner's link, prone to multi-
+          # minute stalls uploading/downloading multi-GB cache archives.
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Extract release notes
+        id: notes
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+
+          if [ -n "$PREV_TAG" ]; then
+            NOTES=$(git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..HEAD" | grep -Eiv '^- (release|prepare) ' || true)
+          else
+            NOTES=$(git log --no-merges --pretty=format:'- %s' HEAD | grep -Eiv '^- (release|prepare) ' || true)
+          fi
+
+          if [ -z "$NOTES" ]; then
+            NOTES="- Internal changes"
+          fi
+
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          maximumAttempts=3
+          for ((attempt = 1; attempt <= maximumAttempts; attempt++)); do
+            echo "npm ci attempt $attempt of $maximumAttempts"
+            if npm ci; then
+              exit 0
+            fi
+
+            if ((attempt < maximumAttempts)); then
+              delaySeconds=$((15 * attempt))
+              echo "::warning::npm ci failed, retrying in $delaySeconds seconds"
+              sleep "$delaySeconds"
+            fi
+          done
+
+          echo "npm ci failed after $maximumAttempts attempts" >&2
+          exit 1
+
+      - name: Build and publish
+        run: |
+          npm run build
+          npx electron-builder --linux AppImage deb --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update release notes
+        shell: bash
+        run: |
+          printf '%s\n' "$RELEASE_NOTES" > /tmp/release-notes.md
+          gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/release-notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.RELEASE_NOTES }}

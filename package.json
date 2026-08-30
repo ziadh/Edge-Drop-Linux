@@ -47,8 +47,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "Deepender25",
-      "repo": "Edge-Drop"
+      "owner": "ziadh",
+      "repo": "Edge-Drop-Linux"
     },
     "win": {
       "extraResources": [
