@@ -1186,7 +1186,7 @@ let _releasesCache: Array<{
 
 async function fetchAndCacheReleases() {
   try {
-    const response = await fetch('https://api.github.com/repos/Deepender25/Edge-Drop/releases', {
+    const response = await fetch('https://api.github.com/repos/ziadh/Edge-Drop-Linux/releases', {
       headers: { 'User-Agent': 'Edge-Drop-App' },
       signal: AbortSignal.timeout(12000)
     })

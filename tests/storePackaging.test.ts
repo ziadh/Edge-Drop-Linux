@@ -80,8 +80,8 @@ describe('GitHub vs Store packaging contracts (on-disk, not assumed)', () => {
   it('keeps GitHub Releases as the NSIS publish source and NSIS artifact name', () => {
     expect(pkg.build.publish).toEqual({
       provider: 'github',
-      owner: 'Deepender25',
-      repo: 'Edge-Drop'
+      owner: 'ziadh',
+      repo: 'Edge-Drop-Linux'
     })
     expect(pkg.build.nsis.artifactName).toContain('${version}')
     expect(pkg.build.nsis.artifactName).toMatch(/\.\$\{ext\}$/)

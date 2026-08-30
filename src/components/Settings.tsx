@@ -183,7 +183,7 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
           style={{ width: '100%', justifyContent: 'center', padding: '7px 14px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12.5px' }}
           onClick={() => {
             playButtonClickSound()
-            window.open('https://github.com/Deepender25/Edge-Drop/issues/new/choose', '_blank')
+            window.open('https://github.com/ziadh/Edge-Drop-Linux/issues/new/choose', '_blank')
           }}
         >
           {t('footer.submitFeedback')}
@@ -219,7 +219,7 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
             className="github-promo-btn"
             onClick={() => {
               playButtonClickSound()
-              window.open('https://github.com/Deepender25/Edge-Drop', '_blank')
+              window.open('https://github.com/ziadh/Edge-Drop-Linux', '_blank')
             }}
           >
             <GithubOctocatLogo width={14} height={14} className="github-octocat-icon" />

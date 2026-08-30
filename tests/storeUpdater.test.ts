@@ -117,7 +117,7 @@ describe('auto-updater isolation', () => {
       await checkForUpdatesManual()
       expect(mocks.netRequest).toHaveBeenCalledWith(expect.objectContaining({
         method: 'GET',
-        url: 'https://api.github.com/repos/Deepender25/Edge-Drop/releases/latest'
+        url: 'https://api.github.com/repos/ziadh/Edge-Drop-Linux/releases/latest'
       }))
     })
   })
