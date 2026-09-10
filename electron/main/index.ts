@@ -23,7 +23,7 @@ import { getDesktopCapabilities } from '../platform/desktop'
 import { createOnboardingWindow } from './onboardingWindow'
 import { startFullscreenMonitor, stopFullscreenMonitor, triggerFullscreenCheck } from './fullscreen'
 import { flushStagedTempRegistry } from './stagedTemp'
-import { extname, normalize } from 'node:path'
+import { basename, dirname, extname, join, normalize } from 'node:path'
 import { existsSync, createReadStream } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { resolveStoredImage } from './imageProtocol'
@@ -40,6 +40,20 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 process.stderr.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code !== 'EPIPE') throw err
 })
+
+// `npm run dev` and an installed production release both resolve to the same
+// default userData path (Electron derives it from package.json's "name"),
+// so they share one settings.json/items.json. That's fine while dev and prod
+// agree on every setting's shape — but it means testing an in-progress
+// feature in dev (e.g. a new enum value an older installed build doesn't
+// recognize yet) can silently corrupt production's settings file and crash
+// it on next launch. Redirect dev to a sibling "-dev" folder instead. Must
+// run before ANY app.getPath('userData') read, including the single-instance
+// lock below, so do it as the very first Electron API call.
+if (APP_CONFIG.is.dev) {
+  const defaultUserData = app.getPath('userData')
+  app.setPath('userData', join(dirname(defaultUserData), `${basename(defaultUserData)}-dev`))
+}
 
 // On Linux, Chromium's default Ozone backend can leave screen.getCursorScreenPoint()
 // stuck reporting a stale position instead of live-polling the pointer (this is what
