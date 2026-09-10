@@ -278,6 +278,39 @@
   flex-direction: column;
 }
 
+/* Top/bottom-docked (horizontal bar): the list has much more width to work
+   with than height, so cards wrap into a responsive multi-column grid
+   instead of stretching into full-width strips. Section labels and an
+   expanded bundle's revealed sub-item list span every column (`grid-column:
+   1 / -1`) so they read as row headers/full-width panels rather than being
+   squeezed into one narrow tile. The list itself keeps scrolling vertically
+   (`.list`'s overflow-y: auto, unchanged) for any rows past the fold. */
+.blade-container.blade-top .pinned-section,
+.blade-container.blade-bottom .pinned-section,
+.blade-container.blade-top .recent-section,
+.blade-container.blade-bottom .recent-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+/* Grid `gap` already provides row/column spacing — .item's own margin-bottom
+   (meant for the flex-column layout) would otherwise double the vertical gap. */
+.blade-container.blade-top .pinned-section > .item,
+.blade-container.blade-bottom .pinned-section > .item,
+.blade-container.blade-top .recent-section > .item,
+.blade-container.blade-bottom .recent-section > .item {
+  margin-bottom: 0;
+}
+.blade-container.blade-top .pinned-section > .section-label,
+.blade-container.blade-bottom .pinned-section > .section-label,
+.blade-container.blade-top .recent-section > .section-label,
+.blade-container.blade-bottom .recent-section > .section-label,
+.blade-container.blade-top .item.bundle[data-expanded-stack],
+.blade-container.blade-bottom .item.bundle[data-expanded-stack] {
+  grid-column: 1 / -1;
+}
+
 /* Clean Pinned Section */
 .pinned-section {
   background: transparent;
