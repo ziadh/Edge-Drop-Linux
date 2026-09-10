@@ -41,17 +41,21 @@
   border-bottom-left-radius: 24px;
 }
 
-/* Top-position blade: centered at top, bottom-rounded corners */
-.blade-container.blade-top {
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: auto !important;
-  y: 0 !important;
+/* Top/bottom-position blade: a horizontal bar instead of a vertical column.
+   Position (top:0 / bottom:0, horizontal centering) is driven by Panel.tsx's
+   inline containerStyle; here we only need to swap which dimension is fixed
+   ("thickness", reusing --panel-width) vs. sized along the edge (width, set
+   inline via panelSizeStr) and round the corners that face into the screen. */
+.blade-container.blade-top .blade,
+.blade-container.blade-bottom .blade {
+  width: auto;
+  height: var(--panel-width);
 }
 .blade-container.blade-top .blade {
-  margin: 0 auto;
   border-radius: 0 0 24px 24px;
+}
+.blade-container.blade-bottom .blade {
+  border-radius: 24px 24px 0 0;
 }
 
 /* Reverse curves (flares) connecting blade to screen edge */
@@ -84,6 +88,41 @@
   display: block;
 }
 
+/* Transposed axis: reverse curves connecting a horizontal (top/bottom
+   stickPosition) blade to the screen edge. .flare-edge-left/.flare-edge-right
+   pick which END of the bar (left/right) the curve belongs to — the mirror
+   of .flare-top/.flare-bottom above — while .flare-bottom-dock picks which
+   screen edge (top or bottom) the bar is stuck to, mirroring .flare-right. */
+.flare-edge-left, .flare-edge-right {
+  position: absolute;
+  top: -30px;
+  width: 30px;
+  height: 60px;
+  pointer-events: none;
+  z-index: -1;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(to bottom, #000000 30px, transparent 30px);
+  justify-content: flex-end;
+}
+.flare-edge-left.flare-bottom-dock, .flare-edge-right.flare-bottom-dock {
+  top: auto;
+  bottom: -30px;
+  background: linear-gradient(to top, #000000 30px, transparent 30px);
+  justify-content: flex-start;
+}
+.flare-edge-left {
+  left: -30px;
+}
+.flare-edge-right {
+  right: -30px;
+}
+.flare-edge-left svg, .flare-edge-right svg {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
 /* CSS transition for clip-path (Framer Motion can't interpolate calc() properly).
    cubic-bezier(0.22, 1, 0.36, 1) is an exponential ease-out — fast initial
    velocity that decelerates to zero, giving the panel a crisp "snapping open"
@@ -108,8 +147,22 @@
   left: auto;
   right: -30px;
 }
+/* Transposed axis: a horizontal solid-block extension along the top/bottom
+   screen edge, mirroring the vertical extension above. */
+.blade-container.blade-top::before,
+.blade-container.blade-bottom::before {
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 31px;
+  top: auto;
+  bottom: auto;
+}
 .blade-container.blade-top::before {
-  display: none;
+  top: -30px;
+}
+.blade-container.blade-bottom::before {
+  bottom: -30px;
 }
 
 

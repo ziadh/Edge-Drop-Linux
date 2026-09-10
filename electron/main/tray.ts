@@ -86,7 +86,9 @@ export function createTray(): Tray {
     const settings = loadSettings()
     return ([
       { pos: 'left' as const, labelKey: 'left' as const },
-      { pos: 'right' as const, labelKey: 'right' as const }
+      { pos: 'right' as const, labelKey: 'right' as const },
+      { pos: 'top' as const, labelKey: 'top' as const },
+      { pos: 'bottom' as const, labelKey: 'bottom' as const }
     ]).map(({ pos, labelKey }) => ({
       label: getTrayText(settings.language, labelKey),
       type: 'radio' as const,

@@ -13,15 +13,34 @@
  */
 
 import type { WorkAreaRect } from './workAreaCache'
+import type { StickPosition } from '../../shared/types'
 
 export interface StickProbeInput {
   /** Global virtual-desktop cursor point (screen.getCursorScreenPoint()). */
   cursor: { x: number; y: number }
   /** Work area of the display the shelf is stuck to. */
   workArea: WorkAreaRect
-  stickPosition: 'left' | 'right'
+  stickPosition: StickPosition
   /** Physical thickness of the hover trigger band. */
   hotZoneWidth: number
+}
+
+/**
+ * Distance from the stuck edge, keyed by position. For left/right (vertical
+ * blade) this is the exact expression the file's original doc comment
+ * describes; top/bottom (horizontal bar) is the Y-axis mirror.
+ */
+function distFromEdgeFor(position: StickPosition, clientX: number, clientY: number, workArea: WorkAreaRect): number {
+  switch (position) {
+    case 'right':
+      return workArea.width - clientX
+    case 'left':
+      return clientX
+    case 'bottom':
+      return workArea.height - clientY
+    case 'top':
+      return clientY
+  }
 }
 
 export interface StickProbeResult {
@@ -47,9 +66,7 @@ export function probeStickEdge(input: StickProbeInput): StickProbeResult {
   const garbage =
     clientX < -5000 || clientX > 15000 || clientY < -5000 || clientY > 15000
 
-  const distFromEdge = stickPosition === 'right'
-    ? workArea.width - clientX
-    : clientX
+  const distFromEdge = distFromEdgeFor(stickPosition, clientX, clientY, workArea)
 
   const inEdge = !garbage && distFromEdge >= -30 && distFromEdge <= hotZoneWidth
 
@@ -120,7 +137,7 @@ export function probeSeamAware(
   input: {
     cursor: { x: number; y: number }
     workArea: WorkAreaRect
-    stickPosition: 'left' | 'right'
+    stickPosition: StickPosition
     hotZoneWidth: number
     /** Monotonic-ish wall time for THIS sample (Date.now() in production). */
     now: number

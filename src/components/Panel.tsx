@@ -22,6 +22,7 @@ import { CopyIndicatorCurve } from './CopyIndicatorCurve'
 import { useFilteredItems } from '../hooks/useFilteredItems'
 
 import { useTranslation } from '../i18n'
+import { computePanelBand } from '../lib/panelGeometry'
 
 export function Panel() {
   const { t } = useTranslation()
@@ -53,21 +54,31 @@ export function Panel() {
     }
   }, [open, setSettingsOpen, setQuery])
 
+  const isBottom = settings.stickPosition === 'bottom'
+  const isRight = settings.stickPosition === 'right'
+  const axis: 'x' | 'y' = (settings.stickPosition === 'top' || settings.stickPosition === 'bottom') ? 'y' : 'x'
+
   const screenH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1200
   const pFrac = settings.panelHeight || 0.6
-  const panelH = screenH * pFrac
-  const minY = panelH / 2
-  const maxY = screenH - panelH / 2
   const vOffset = settings.verticalOffset ?? 0.5
-  const midY = Math.round(minY + vOffset * (maxY - minY))
+  const hOffset = settings.horizontalOffset ?? 0.5
+  const vBand = computePanelBand(screenH, vOffset, pFrac)
+  const hBand = computePanelBand(screenW, hOffset, pFrac)
+  const midY = vBand.mid
   const topOffset = `${midY}px`
+  const midX = hBand.mid
+  const leftOffset = `${midX}px`
 
-  // The actual pixel height of the trigger zone on the left edge
+  // The actual pixel thickness of the trigger zone on the stuck edge
   const triggerHeightPx = Math.round(window.innerHeight * settings.hotZoneHeight)
+  const triggerWidthPx = Math.round(window.innerWidth * settings.hotZoneHeight)
   const halfTrigger = Math.round(triggerHeightPx / 2)
+  const halfTriggerW = Math.round(triggerWidthPx / 2)
 
-  // The height of the complete pop-up panel
-  const panelHeightStr = `${(settings.panelHeight || 0.6) * 100}vh`
+  // The size of the complete pop-up panel along the stuck edge (height for a
+  // left/right blade, width for a top/bottom bar).
+  const panelSizeStr = `${(settings.panelHeight || 0.6) * 100}${axis === 'x' ? 'vh' : 'vw'}`
 
   const setDragActive = useStore((s) => s.setDragActive)
   const setInternalDragReq = useStore((s) => s.setInternalDragReq)
@@ -193,10 +204,10 @@ export function Panel() {
     setDragActive(false)
   }
 
-  const isRight = settings.stickPosition === 'right'
-
   let containerClass = 'blade-container'
   if (isRight) containerClass += ' blade-right'
+  if (settings.stickPosition === 'top') containerClass += ' blade-top'
+  if (settings.stickPosition === 'bottom') containerClass += ' blade-bottom'
 
   const containerStyle: Record<string, unknown> = {
     position: 'absolute',
@@ -207,7 +218,17 @@ export function Panel() {
 
   let originX = 0
   let originY = 0.5
-  if (isRight) {
+  if (axis === 'y') {
+    containerStyle.left = leftOffset
+    containerStyle.x = '-50%'
+    if (isBottom) {
+      containerStyle.bottom = 0
+    } else {
+      containerStyle.top = 0
+    }
+    originX = 0.5
+    originY = isBottom ? 1 : 0
+  } else if (isRight) {
     containerStyle.top = topOffset
     containerStyle.y = '-50%'
     containerStyle.right = 0
@@ -234,11 +255,25 @@ export function Panel() {
     insetBottom = '0px'
   }
 
+  // Horizontal trigger inset for a top/bottom-docked bar — always centered.
+  // triggerAlignment's top/center/bottom only has meaning along a vertical
+  // edge, so it isn't extended to an X-axis equivalent here (see useEdgeHover.ts).
+  const insetLeft = `calc(50% - ${halfTriggerW}px)`
+  const insetRight = `calc(50% - ${halfTriggerW}px)`
+
   // Set clipPath via style (not animate) to avoid Framer Motion's broken
   // calc() interpolation — CSS transitions handle it correctly.
   let clipPath: string
   const hotWidth = settings.hotZoneWidth || 3
-  if (isRight) {
+  if (axis === 'y') {
+    clipPath = open
+      ? (isBottom
+          ? 'inset(calc(0% - 800px) calc(0% - 100px) calc(0% - 100px) calc(0% - 100px) round 24px 24px 0px 0px)'
+          : 'inset(calc(0% - 100px) calc(0% - 100px) calc(0% - 800px) calc(0% - 100px) round 0px 0px 24px 24px)')
+      : (isBottom
+          ? `inset(calc(100% - ${hotWidth}px) ${insetRight} 0px ${insetLeft} round 24px 24px 0px 0px)`
+          : `inset(0px ${insetRight} calc(100% - ${hotWidth}px) ${insetLeft} round 0px 0px 24px 24px)`)
+  } else if (isRight) {
     clipPath = open
       ? 'inset(calc(0% - 100px) 0px calc(0% - 100px) calc(0% - 800px) round 24px 0px 0px 24px)'
       : `inset(${insetTop} 0px ${insetBottom} calc(100% - ${hotWidth}px) round 24px 0px 0px 24px)`
@@ -288,23 +323,52 @@ export function Panel() {
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              style={{
-                position: 'absolute',
-                top: insetTop,
-                bottom: insetBottom,
-                [isRight ? 'right' : 'left']: 0,
-                width: 2,
-                boxSizing: 'border-box',
-                background: 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.65) 25%, rgba(255, 255, 255, 0.65) 75%, transparent)',
-                boxShadow: '0 0 6px rgba(255, 255, 255, 0.3)',
-                borderRadius: isRight ? '999px 0 0 999px' : '0 999px 999px 0',
-                pointerEvents: 'none',
-                zIndex: 99
-              }}
+              style={
+                axis === 'y'
+                  ? {
+                      position: 'absolute',
+                      left: insetLeft,
+                      right: insetRight,
+                      [isBottom ? 'bottom' : 'top']: 0,
+                      height: 2,
+                      boxSizing: 'border-box',
+                      background: 'linear-gradient(to right, transparent, rgba(255, 255, 255, 0.65) 25%, rgba(255, 255, 255, 0.65) 75%, transparent)',
+                      boxShadow: '0 0 6px rgba(255, 255, 255, 0.3)',
+                      borderRadius: isBottom ? '999px 999px 0 0' : '0 0 999px 999px',
+                      pointerEvents: 'none',
+                      zIndex: 99
+                    }
+                  : {
+                      position: 'absolute',
+                      top: insetTop,
+                      bottom: insetBottom,
+                      [isRight ? 'right' : 'left']: 0,
+                      width: 2,
+                      boxSizing: 'border-box',
+                      background: 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.65) 25%, rgba(255, 255, 255, 0.65) 75%, transparent)',
+                      boxShadow: '0 0 6px rgba(255, 255, 255, 0.3)',
+                      borderRadius: isRight ? '999px 0 0 999px' : '0 999px 999px 0',
+                      pointerEvents: 'none',
+                      zIndex: 99
+                    }
+              }
             />
           )}
         </AnimatePresence>
-        {isRight ? (
+        {axis === 'y' ? (
+          <>
+            <div className={`flare-edge-left${isBottom ? ' flare-bottom-dock' : ''}`}>
+              <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d={isBottom ? 'M 0 30 L 30 30 L 30 0 A 30 30 0 0 1 0 30 Z' : 'M 0 0 L 30 0 L 30 30 A 30 30 0 0 0 0 0 Z'} fill="#000000" />
+              </svg>
+            </div>
+            <div className={`flare-edge-right${isBottom ? ' flare-bottom-dock' : ''}`}>
+              <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d={isBottom ? 'M 30 30 L 0 30 L 0 0 A 30 30 0 0 0 30 30 Z' : 'M 30 0 L 0 0 L 0 30 A 30 30 0 0 1 30 0 Z'} fill="#000000" />
+              </svg>
+            </div>
+          </>
+        ) : isRight ? (
           <>
             <div className="flare-top flare-right">
               <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -334,7 +398,7 @@ export function Panel() {
         <div
           ref={bladeRef}
           className="blade"
-          style={{ height: panelHeightStr }}
+          style={axis === 'x' ? { height: panelSizeStr } : { width: panelSizeStr }}
         >
           <Header />
 
@@ -344,9 +408,9 @@ export function Panel() {
               {settingsOpen ? (
                 <motion.div
                   key="settings"
-                  initial={{ opacity: 1, x: isRight ? -8 : 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: isRight ? 8 : -8 }}
+                  initial={axis === 'y' ? { opacity: 1, y: isBottom ? -8 : 8 } : { opacity: 1, x: isRight ? -8 : 8 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  exit={axis === 'y' ? { opacity: 0, y: isBottom ? 8 : -8 } : { opacity: 0, x: isRight ? 8 : -8 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.5 }}
                   style={{ gridArea: '1 / 1 / 2 / 2', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
                 >
@@ -355,9 +419,9 @@ export function Panel() {
               ) : (
                 <motion.div
                   key="list"
-                  initial={{ opacity: 1, x: isRight ? 8 : -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: isRight ? -8 : 8 }}
+                  initial={axis === 'y' ? { opacity: 1, y: isBottom ? 8 : -8 } : { opacity: 1, x: isRight ? 8 : -8 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  exit={axis === 'y' ? { opacity: 0, y: isBottom ? -8 : 8 } : { opacity: 0, x: isRight ? -8 : 8 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.5 }}
                   style={{ gridArea: '1 / 1 / 2 / 2', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
                 >
@@ -386,10 +450,10 @@ export function Panel() {
           </AnimatePresence>
           </div>
           <DropOverlay />
-          <SplitDropZone isRight={isRight} />
+          <SplitDropZone isRight={isRight} isBottom={isBottom} axis={axis} />
         </div>
-        <PreviewFlyout isRight={isRight} />
-        <IndicatorStyleFlyout isRight={isRight} />
+        <PreviewFlyout isRight={isRight} isBottom={isBottom} axis={axis} />
+        <IndicatorStyleFlyout isRight={isRight} isBottom={isBottom} axis={axis} />
       </motion.div>
     </div>
   )
@@ -475,7 +539,7 @@ function DropOverlay() {
   )
 }
 
-function SplitDropZone({ isRight = false }: { isRight?: boolean }) {
+function SplitDropZone({ isRight = false, isBottom = false, axis = 'x' }: { isRight?: boolean; isBottom?: boolean; axis?: 'x' | 'y' }) {
   const internalDragReq = useStore((s) => s.internalDragReq)
   const isSubitemDragging = !!(
     internalDragReq &&
@@ -497,19 +561,29 @@ function SplitDropZone({ isRight = false }: { isRight?: boolean }) {
     <AnimatePresence>
       {isSubitemDragging && (
         <motion.div
-          className={`split-dropzone${isOver ? ' active' : ''}`}
+          className={`split-dropzone${isOver ? ' active' : ''}${axis === 'y' ? ' axis-y' : ''}`}
           onDragOver={(e) => e.preventDefault()}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
-          initial={{ opacity: 0, x: isRight ? 15 : -15 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: isRight ? 15 : -15 }}
+          initial={axis === 'y' ? { opacity: 0, y: isBottom ? 15 : -15 } : { opacity: 0, x: isRight ? 15 : -15 }}
+          animate={{ opacity: 1, x: 0, y: 0 }}
+          exit={axis === 'y' ? { opacity: 0, y: isBottom ? 15 : -15 } : { opacity: 0, x: isRight ? 15 : -15 }}
           transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-          style={{
-            left: isRight ? 'auto' : 0,
-            right: isRight ? 0 : 'auto',
-            justifyContent: isRight ? 'flex-end' : 'flex-start'
-          }}
+          style={
+            axis === 'y'
+              ? {
+                  top: isBottom ? 'auto' : 0,
+                  bottom: isBottom ? 0 : 'auto',
+                  left: 0,
+                  right: 0,
+                  justifyContent: isBottom ? 'flex-end' : 'flex-start'
+                }
+              : {
+                  left: isRight ? 'auto' : 0,
+                  right: isRight ? 0 : 'auto',
+                  justifyContent: isRight ? 'flex-end' : 'flex-start'
+                }
+          }
         >
           <div className="glow-line" />
         </motion.div>

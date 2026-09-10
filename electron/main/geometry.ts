@@ -1,4 +1,4 @@
-export type StickPosition = 'left' | 'right'
+import type { StickPosition } from '../../shared/types'
 
 export interface DisplayInfo {
   id: number
@@ -106,9 +106,13 @@ export function computeStickBounds(params: StickBoundsParams): StickBoundsResult
 
   let x: number
   let y: number
-  const width = windowWidth
-  // Use the resolved display's own height — NOT always the primary's.
-  const height = wa.height
+  // For a top/bottom (horizontal) bar, the fixed "thickness" dimension is the
+  // height and the window spans the display's full width; for a left/right
+  // (vertical) blade it's the other way around, exactly as before.
+  const isHorizontalAxis = position === 'top' || position === 'bottom'
+  // Use the resolved display's own width/height — NOT always the primary's.
+  const width = isHorizontalAxis ? wa.width : windowWidth
+  const height = isHorizontalAxis ? windowWidth : wa.height
 
   switch (position) {
     case 'left':
@@ -118,6 +122,14 @@ export function computeStickBounds(params: StickBoundsParams): StickBoundsResult
     case 'right':
       x = wa.x + wa.width - windowWidth
       y = wa.y
+      break
+    case 'top':
+      x = wa.x
+      y = wa.y
+      break
+    case 'bottom':
+      x = wa.x
+      y = wa.y + wa.height - windowWidth
       break
   }
 

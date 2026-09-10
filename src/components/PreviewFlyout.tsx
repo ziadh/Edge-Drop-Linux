@@ -10,6 +10,7 @@ import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
 import { useDragOut } from '../hooks/useDragOut'
 import { tryPaste } from '../lib/tryPaste'
 import { playButtonClickSound, playToggleSound } from '../lib/soundEffects'
+import { computePanelBand } from '../lib/panelGeometry'
 
 import { useTranslation } from '../i18n'
 
@@ -17,57 +18,79 @@ import { useTranslation } from '../i18n'
 const flyoutEaseOpen = [0.16, 1, 0.3, 1] as const
 const flyoutEaseClose = [0.3, 0, 0.2, 1] as const
 
+interface FlyoutOrientation {
+  isRight: boolean
+  isBottom: boolean
+  axis: 'x' | 'y'
+}
+
 const flyoutVariants = {
-  hidden: (isRight: boolean) => ({
-    opacity: 0,
-    x: isRight ? 14 : -14,
-    scale: 0.97,
-  }),
+  hidden: ({ isRight, isBottom, axis }: FlyoutOrientation) =>
+    axis === 'y'
+      ? { opacity: 0, y: isBottom ? 14 : -14, scale: 0.97 }
+      : { opacity: 0, x: isRight ? 14 : -14, scale: 0.97 },
   shown: {
     opacity: 1,
     x: 0,
+    y: 0,
     scale: 1,
     transition: {
       x: { duration: 0.26, ease: flyoutEaseOpen },
+      y: { duration: 0.26, ease: flyoutEaseOpen },
       scale: { duration: 0.26, ease: flyoutEaseOpen },
       opacity: { duration: 0.18, ease: 'easeOut' as const },
     },
   },
-  exit: (isRight: boolean) => ({
-    opacity: 0,
-    x: isRight ? 10 : -10,
-    scale: 0.98,
-    transition: {
-      x: { duration: 0.18, ease: flyoutEaseClose },
-      scale: { duration: 0.18, ease: flyoutEaseClose },
-      opacity: { duration: 0.14, ease: 'easeIn' as const },
-    },
-  }),
+  exit: ({ isRight, isBottom, axis }: FlyoutOrientation) =>
+    axis === 'y'
+      ? {
+          opacity: 0,
+          y: isBottom ? 10 : -10,
+          scale: 0.98,
+          transition: {
+            y: { duration: 0.18, ease: flyoutEaseClose },
+            scale: { duration: 0.18, ease: flyoutEaseClose },
+            opacity: { duration: 0.14, ease: 'easeIn' as const },
+          },
+        }
+      : {
+          opacity: 0,
+          x: isRight ? 10 : -10,
+          scale: 0.98,
+          transition: {
+            x: { duration: 0.18, ease: flyoutEaseClose },
+            scale: { duration: 0.18, ease: flyoutEaseClose },
+            opacity: { duration: 0.14, ease: 'easeIn' as const },
+          },
+        },
   reducedHidden: { opacity: 0 },
   reducedShown: { opacity: 1 },
 }
 
-export function PreviewFlyout({ isRight }: { isRight: boolean }) {
+export function PreviewFlyout({ isRight, isBottom = false, axis = 'x' }: { isRight: boolean; isBottom?: boolean; axis?: 'x' | 'y' }) {
   const { t } = useTranslation()
   const previewItemId = useStore((s) => s.previewItemId)
   const items = useStore((s) => s.items)
   const settings = useStore((s) => s.settings)
   const adaptiveSpring = useAdaptiveSpring()
-  
+
   const item = previewItemId ? items.find((i) => i.id === previewItemId) : null
 
   const screenH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1200
   const pFrac = settings.panelHeight || 0.6
-  const panelH = screenH * pFrac
-  const minY = panelH / 2
-  const maxY = screenH - panelH / 2
   const vOffset = settings.verticalOffset ?? 0.5
-  const midY = Math.round(minY + vOffset * (maxY - minY))
-  const panelTop = midY - panelH / 2
+  const hOffset = settings.horizontalOffset ?? 0.5
+  const vBand = computePanelBand(screenH, vOffset, pFrac)
+  const hBand = computePanelBand(screenW, hOffset, pFrac)
+  const panelH = vBand.size
+  const panelTop = vBand.start
+  const panelW = hBand.size
+  const panelLeft = hBand.start
 
   const reduceMotion = settings.reduceMotion || adaptiveSpring.type === 'tween'
 
-  const maxFlyoutHeight = Math.max(100, panelH - 24)
+  const maxFlyoutHeight = Math.max(100, screenH * pFrac - 24)
 
   const [dragOver, setDragOver] = useState(false)
   const flyoutRef = useRef<HTMLDivElement | null>(null)
@@ -80,11 +103,22 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
 
     const updateRect = () => {
       if (!flyoutRef.current) return
-      // offsetHeight ignores the wrapper transform, so the hover
-      // keep-alive zone stays full-size while the open/close motion plays.
-      const h = flyoutRef.current.offsetHeight
-      const top = panelTop + (panelH - h) / 2
-      useStore.getState().setPreviewFlyoutRect({ top, bottom: top + h })
+      if (axis === 'y') {
+        // offsetWidth ignores the wrapper transform, so the hover keep-alive
+        // zone stays full-size while the open/close motion plays. Reuses the
+        // {top,bottom} field names to mean {left,right} for a horizontal-axis
+        // flyout — useEdgeHover.ts reads them the same way for stickPosition
+        // 'top'/'bottom'.
+        const w = flyoutRef.current.offsetWidth
+        const left = panelLeft + (panelW - w) / 2
+        useStore.getState().setPreviewFlyoutRect({ top: left, bottom: left + w })
+      } else {
+        // offsetHeight ignores the wrapper transform, so the hover
+        // keep-alive zone stays full-size while the open/close motion plays.
+        const h = flyoutRef.current.offsetHeight
+        const top = panelTop + (panelH - h) / 2
+        useStore.getState().setPreviewFlyoutRect({ top, bottom: top + h })
+      }
     }
 
     updateRect()
@@ -97,7 +131,7 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
       window.removeEventListener('resize', updateRect)
       useStore.getState().setPreviewFlyoutRect(null)
     }
-  }, [item?.id, panelTop, panelH])
+  }, [item?.id, panelTop, panelH, panelLeft, panelW, axis])
 
   const handleDragOver = (e: React.DragEvent) => {
     const activeDrag = useStore.getState().internalDragReq
@@ -197,29 +231,49 @@ export function PreviewFlyout({ isRight }: { isRight: boolean }) {
       {item && (
         <motion.div
           key={item.id}
-          custom={isRight}
+          custom={{ isRight, isBottom, axis } satisfies FlyoutOrientation}
           variants={flyoutVariants}
           initial={reduceMotion ? 'reducedHidden' : 'hidden'}
           animate={reduceMotion ? 'reducedShown' : 'shown'}
           exit={reduceMotion ? 'reducedHidden' : 'exit'}
           transition={reduceMotion ? { duration: 0.12, ease: 'linear' } : undefined}
-          style={{
-            position: 'absolute',
-            top: panelTop,
-            height: panelH,
-            [isRight ? 'right' : 'left']: 'var(--panel-width)',
-            marginLeft: isRight ? 0 : 12,
-            marginRight: isRight ? 12 : 0,
-            width: 440,
-            display: 'flex',
-            alignItems: 'center',
-            pointerEvents: 'none',
-            zIndex: 5,
-            originX: isRight ? 1 : 0,
-            originY: 0.5,
-            willChange: 'transform, opacity',
-            backfaceVisibility: 'hidden',
-          }}
+          style={
+            axis === 'y'
+              ? {
+                  position: 'absolute',
+                  left: panelLeft,
+                  width: panelW,
+                  [isBottom ? 'bottom' : 'top']: 'var(--panel-width)',
+                  marginTop: isBottom ? 0 : 12,
+                  marginBottom: isBottom ? 12 : 0,
+                  height: 440,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  originX: 0.5,
+                  originY: isBottom ? 1 : 0,
+                  willChange: 'transform, opacity',
+                  backfaceVisibility: 'hidden',
+                }
+              : {
+                  position: 'absolute',
+                  top: panelTop,
+                  height: panelH,
+                  [isRight ? 'right' : 'left']: 'var(--panel-width)',
+                  marginLeft: isRight ? 0 : 12,
+                  marginRight: isRight ? 12 : 0,
+                  width: 440,
+                  display: 'flex',
+                  alignItems: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  originX: isRight ? 1 : 0,
+                  originY: 0.5,
+                  willChange: 'transform, opacity',
+                  backfaceVisibility: 'hidden',
+                }
+          }
         >
           <div
             ref={flyoutRef}

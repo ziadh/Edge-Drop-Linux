@@ -26,6 +26,56 @@ describe('computeStickBounds � original tests', () => {
   })
 })
 
+describe('computeStickBounds — top/bottom axis (horizontal bar)', () => {
+  it('sticks to top edge of primary display: full width, fixed height, y=0', () => {
+    const r = computeStickBounds({ position: 'top', displays: [PRIMARY], windowWidth: 384 })
+    expect(r.x).toBe(0); expect(r.y).toBe(0)
+    expect(r.width).toBe(1920); expect(r.height).toBe(384)
+    expect(r.displayId).toBe(1)
+  })
+  it('sticks to bottom edge of primary display: full width, fixed height, y = display height - thickness', () => {
+    const r = computeStickBounds({ position: 'bottom', displays: [PRIMARY], windowWidth: 384 })
+    expect(r.x).toBe(0); expect(r.y).toBe(1040 - 384)
+    expect(r.width).toBe(1920); expect(r.height).toBe(384)
+  })
+  it('sticks to top edge of secondary display: x follows the resolved display, not primary', () => {
+    const r = computeStickBounds({ position: 'top', displays: [PRIMARY, SECONDARY], displayId: 2, windowWidth: 384 })
+    expect(r.x).toBe(1920); expect(r.y).toBe(0)
+    expect(r.width).toBe(1920); expect(r.height).toBe(384)
+    expect(r.displayId).toBe(2)
+  })
+  it('sticks to bottom edge of secondary display', () => {
+    const r = computeStickBounds({ position: 'bottom', displays: [PRIMARY, SECONDARY], displayId: 2, windowWidth: 384 })
+    expect(r.x).toBe(1920); expect(r.y).toBe(1040 - 384)
+    expect(r.displayId).toBe(2)
+  })
+  it('left/right cases are completely unaffected by the isHorizontalAxis branch (width=thickness, height=full)', () => {
+    const r = computeStickBounds({ position: 'left', displays: [PRIMARY], windowWidth: 384 })
+    expect(r.width).toBe(384); expect(r.height).toBe(1040)
+  })
+
+  // Display-resolution tiers are position-independent (the switch only runs
+  // after the tier logic resolves `display`) — re-exercise a representative
+  // case from each tier with position 'top'/'bottom' substituted for 'left'.
+  it('Tier-1 exact ID match works identically for a top-stuck bar', () => {
+    const r = computeStickBounds({ position: 'top', displays: [PRIMARY, SECONDARY], displayId: 2, windowWidth: 384 })
+    expect(r.displayId).toBe(2)
+  })
+  it('Tier-2 fuzzy workArea match works identically for a bottom-stuck bar', () => {
+    const rebooted = makeDisplay(99, 1920, 0, 1920, 1040)
+    const r = computeStickBounds({ position: 'bottom', displays: [PRIMARY, rebooted], displayId: 2, savedWorkArea: { x: 1920, y: 0, width: 1920, height: 1040 }, savedScaleFactor: 1, windowWidth: 384 })
+    expect(r.displayId).toBe(99)
+  })
+  it('Tier-3 nearest-by-currentBounds match works identically for a top-stuck bar', () => {
+    const r = computeStickBounds({ position: 'top', displays: [PRIMARY, SECONDARY], displayId: undefined, currentBounds: { x: 2100, y: 100 }, windowWidth: 384 })
+    expect(r.displayId).toBe(2)
+  })
+  it('Tier-4 primary fallback works identically for a bottom-stuck bar', () => {
+    const r = computeStickBounds({ position: 'bottom', displays: [SECONDARY, PRIMARY], windowWidth: 384 })
+    expect(r.displayId).toBe(1)
+  })
+})
+
 describe('Fix 1 � isPrimary typed property for Tier-4 fallback', () => {
   it('secondary listed first: still picks primary via isPrimary flag', () => {
     const secondaryFirst = [SECONDARY, PRIMARY]

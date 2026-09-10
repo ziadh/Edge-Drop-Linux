@@ -15,9 +15,10 @@ import { CloseIcon } from './icons'
 import { playButtonClickSound } from '../lib/soundEffects'
 import { createPortal } from 'react-dom'
 import { useAdaptiveSpring } from '../hooks/useAdaptiveSpring'
+import { computePanelBand } from '../lib/panelGeometry'
 import { useTranslation } from '../i18n'
 
-export function IndicatorStyleFlyout({ isRight }: { isRight: boolean }) {
+export function IndicatorStyleFlyout({ isRight, isBottom = false, axis = 'x' }: { isRight: boolean; isBottom?: boolean; axis?: 'x' | 'y' }) {
   const { t } = useTranslation()
   const styleFlyoutOpen = useStore((s) => s.styleFlyoutOpen)
   const setStyleFlyoutOpen = useStore((s) => s.setStyleFlyoutOpen)
@@ -40,7 +41,13 @@ export function IndicatorStyleFlyout({ isRight }: { isRight: boolean }) {
     const updateRect = () => {
       if (flyoutRef.current) {
         const r = flyoutRef.current.getBoundingClientRect()
-        useStore.getState().setPreviewFlyoutRect({ top: r.top, bottom: r.bottom })
+        // Reuses the {top,bottom} field names to mean {left,right} for a
+        // horizontal-axis flyout — see PreviewFlyout.tsx for the same convention.
+        if (axis === 'y') {
+          useStore.getState().setPreviewFlyoutRect({ top: r.left, bottom: r.right })
+        } else {
+          useStore.getState().setPreviewFlyoutRect({ top: r.top, bottom: r.bottom })
+        }
       }
     }
 
@@ -54,33 +61,52 @@ export function IndicatorStyleFlyout({ isRight }: { isRight: boolean }) {
       window.removeEventListener('resize', updateRect)
       useStore.getState().setPreviewFlyoutRect(null)
     }
-  }, [isVisible])
+  }, [isVisible, axis])
 
   const screenH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1200
   const pFrac = settings.panelHeight || 0.6
-  const panelH = screenH * pFrac
-  const minY = panelH / 2
-  const maxY = screenH - panelH / 2
   const vOffset = settings.verticalOffset ?? 0.5
-  const midY = Math.round(minY + vOffset * (maxY - minY))
-  const panelTop = midY - panelH / 2
+  const hOffset = settings.horizontalOffset ?? 0.5
+  const vBand = computePanelBand(screenH, vOffset, pFrac)
+  const hBand = computePanelBand(screenW, hOffset, pFrac)
+  const panelH = vBand.size
+  const panelTop = vBand.start
+  const panelW = hBand.size
+  const panelLeft = hBand.start
 
-  const maxFlyoutHeight = Math.max(100, panelH - 24)
+  const maxFlyoutHeight = Math.max(100, screenH * pFrac - 24)
 
   return createPortal(
-    <div style={{
-      position: 'absolute',
-      top: panelTop,
-      height: panelH,
-      [isRight ? 'right' : 'left']: 'var(--panel-width)',
-      marginLeft: isRight ? 0 : 12,
-      marginRight: isRight ? 12 : 0,
-      width: 280,
-      display: 'flex',
-      alignItems: 'center',
-      pointerEvents: 'none',
-      zIndex: 5,
-    }}>
+    <div style={
+      axis === 'y'
+        ? {
+            position: 'absolute',
+            left: panelLeft,
+            width: panelW,
+            [isBottom ? 'bottom' : 'top']: 'var(--panel-width)',
+            marginTop: isBottom ? 0 : 12,
+            marginBottom: isBottom ? 12 : 0,
+            height: 280,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 5,
+          }
+        : {
+            position: 'absolute',
+            top: panelTop,
+            height: panelH,
+            [isRight ? 'right' : 'left']: 'var(--panel-width)',
+            marginLeft: isRight ? 0 : 12,
+            marginRight: isRight ? 12 : 0,
+            width: 280,
+            display: 'flex',
+            alignItems: 'center',
+            pointerEvents: 'none',
+            zIndex: 5,
+          }
+    }>
       <AnimatePresence mode="wait" onExitComplete={() => {
         const s = useStore.getState()
         if (!s.styleFlyoutOpen && !s.previewItemId) {
@@ -112,7 +138,7 @@ export function IndicatorStyleFlyout({ isRight }: { isRight: boolean }) {
               flexDirection: 'column',
               boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
               pointerEvents: 'auto',
-              transformOrigin: `${isRight ? '100%' : '0%'} 50%`,
+              transformOrigin: axis === 'y' ? `50% ${isBottom ? '100%' : '0%'}` : `${isRight ? '100%' : '0%'} 50%`,
               willChange: 'transform, opacity',
               transition: 'background 0.2s ease, border 0.2s ease, box-shadow 0.2s ease',
               position: 'relative',

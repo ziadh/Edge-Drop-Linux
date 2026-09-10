@@ -398,7 +398,7 @@ export function stopCursorPoll(): void {
   }
 }
 
-function getStickGeometry(): { x: number; y: number; width: number; height: number } {
+function getStickGeometry(): { x: number; y: number; width: number; height: number; isHorizontalAxis: boolean } {
   let settings = loadSettings()
   const primaryDisplay = screen.getPrimaryDisplay()
   const allDisplays = screen.getAllDisplays().map(d => ({
@@ -504,24 +504,25 @@ function getStickGeometry(): { x: number; y: number; width: number; height: numb
   // origin (the "hover secondary does nothing, hover primary opens it on
   // secondary" report).
   workAreaCache.refresh(resolved.id)
-  return { x: result.x, y: result.y, width: result.width, height: result.height }
+  const isHorizontalAxis = settings.stickPosition === 'top' || settings.stickPosition === 'bottom'
+  return { x: result.x, y: result.y, width: result.width, height: result.height, isHorizontalAxis }
 }
 
 export function createWindow(): BrowserWindow {
-  const { x, y, height } = getStickGeometry()
+  const { x, y, width, height, isHorizontalAxis } = getStickGeometry()
 
   mainWindow = new BrowserWindow({
     icon: PATHS.icon(),
     x,
     y,
-    width: PANEL_WIDTH,
-    height,
+    width: isHorizontalAxis ? width : PANEL_WIDTH,
+    height: isHorizontalAxis ? PANEL_WIDTH : height,
     show: false,
     frame: false,
     fullscreenable: false,
     maximizable: false,
-    minWidth: PANEL_WIDTH,
-    minHeight: 320,
+    minWidth: isHorizontalAxis ? 320 : PANEL_WIDTH,
+    minHeight: isHorizontalAxis ? PANEL_WIDTH : 320,
     movable: false,
     resizable: false,
     transparent: true,
@@ -827,8 +828,8 @@ export function repositionWindow(): void {
   mainWindow.showInactive()
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
   mainWindow.setSkipTaskbar(true)
-  const g = getStickGeometry()
-  mainWindow.setBounds({ ...g })
+  const { x, y, width, height } = getStickGeometry()
+  mainWindow.setBounds({ x, y, width, height })
   onWindowRepositioned?.()
 }
 

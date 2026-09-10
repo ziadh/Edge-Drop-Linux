@@ -831,3 +831,33 @@
   background: linear-gradient(to bottom, transparent, #f97316, transparent);
   box-shadow: 0 0 24px rgba(249, 115, 22, 0.9), 0 0 40px rgba(249, 115, 22, 0.5);
 }
+
+/* Transposed axis for a top/bottom-docked (horizontal) blade: the split
+   drop-zone spans the blade's full width instead of its full height, and
+   the glow line runs horizontally instead of vertically. */
+.split-dropzone.axis-y {
+  top: auto;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 80px;
+}
+.split-dropzone.axis-y .glow-line {
+  width: 60%;
+  height: 2px;
+  max-width: 280px;
+  max-height: none;
+  background: linear-gradient(to right, transparent, rgba(249, 115, 22, 0.85), transparent);
+  margin-left: 0;
+}
+.split-dropzone.axis-y.active {
+  width: auto;
+  height: 100px;
+}
+.split-dropzone.axis-y.active .glow-line {
+  width: 72%;
+  height: 3.5px;
+  max-width: 340px;
+  background: linear-gradient(to right, transparent, #f97316, transparent);
+}

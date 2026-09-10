@@ -56,6 +56,29 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
     patch({ verticalOffset: clamped })
   }
 
+  // Horizontal-position slider (mirror of the vertical one above), used when
+  // stickPosition is 'top'/'bottom' instead of 'left'/'right'.
+  const lastTickValH = useRef<number>(settings.horizontalOffset ?? 0.5)
+
+  const handleHorizontalSliderInput = (rawVal: number) => {
+    const clamped = Math.min(1.0, Math.max(0.0, rawVal))
+    if (Math.abs(clamped - lastTickValH.current) >= 0.05) {
+      lastTickValH.current = clamped
+      playDialTickSound()
+    }
+    useStore.setState((s) => ({
+      settings: { ...s.settings, horizontalOffset: clamped }
+    }))
+  }
+
+  const handleHorizontalSliderRelease = (rawVal: number) => {
+    const snapped = Math.round(rawVal / 0.05) * 0.05
+    const clamped = Math.min(1.0, Math.max(0.0, snapped))
+    lastTickValH.current = clamped
+    playDialTickSound()
+    patch({ horizontalOffset: clamped })
+  }
+
   const [localInlineOpen, setLocalInlineOpen] = useState(false)
   const isTutorial = inlineIndicatorStyle || (typeof window !== 'undefined' && window.location.hash.includes('onboarding'))
 
@@ -774,7 +797,9 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
                     <div className="setting-pills">
                       {[
                         { label: t('position.leftEdge'), val: 'left' as const },
-                        { label: t('position.rightEdge'), val: 'right' as const }
+                        { label: t('position.rightEdge'), val: 'right' as const },
+                        { label: t('position.topEdge'), val: 'top' as const },
+                        { label: t('position.bottomEdge'), val: 'bottom' as const }
                       ].map((opt) => (
                         <button
                           key={opt.val}
@@ -793,93 +818,189 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
 
                   <div className="setting-divider" />
 
-                  {/* Vertical Position Range Slider */}
-                  <div className="setting-row vertical" style={{ gap: 10 }}>
-                    <div className="setting-slider-header">
-                      <div className="setting-info">
-                        <div className="setting-title">{t('position.verticalPositionTitle')}</div>
-                        <div className="setting-desc">{t('position.verticalPositionDesc')}</div>
-                      </div>
-                      <div className="setting-slider-val">
-                        {`${Math.round((settings.verticalOffset ?? 0.5) * 100)}%`}
-                      </div>
-                    </div>
+                  {(settings.stickPosition === 'left' || settings.stickPosition === 'right') && (
+                    <>
+                      {/* Vertical Position Range Slider */}
+                      <div className="setting-row vertical" style={{ gap: 10 }}>
+                        <div className="setting-slider-header">
+                          <div className="setting-info">
+                            <div className="setting-title">{t('position.verticalPositionTitle')}</div>
+                            <div className="setting-desc">{t('position.verticalPositionDesc')}</div>
+                          </div>
+                          <div className="setting-slider-val">
+                            {`${Math.round((settings.verticalOffset ?? 0.5) * 100)}%`}
+                          </div>
+                        </div>
 
-                    <div className="setting-slider-wrap">
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.002"
-                        className="setting-range-input"
-                        value={settings.verticalOffset ?? 0.5}
-                        style={{
-                          background: `linear-gradient(to right, #ffffff 0%, #ffffff ${(settings.verticalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) ${(settings.verticalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) 100%)`
-                        }}
-                        onPointerDown={() => {
-                          void window.edge.setInteractive(true)
-                          setSliderActive(true)
-                        }}
-                        onPointerUp={(e) => {
-                          setSliderActive(false)
-                          const val = parseFloat((e.target as HTMLInputElement).value)
-                          handleSliderRelease(val)
-                        }}
-                        onPointerCancel={(e) => {
-                          setSliderActive(false)
-                          const val = parseFloat((e.target as HTMLInputElement).value)
-                          handleSliderRelease(val)
-                        }}
-                        onLostPointerCapture={(e) => {
-                          setSliderActive(false)
-                          const val = parseFloat((e.target as HTMLInputElement).value)
-                          handleSliderRelease(val)
-                        }}
-                        onChange={(e) => {
-                          const raw = parseFloat(e.target.value)
-                          handleSliderInput(raw)
-                        }}
-                      />
+                        <div className="setting-slider-wrap">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.002"
+                            className="setting-range-input"
+                            value={settings.verticalOffset ?? 0.5}
+                            style={{
+                              background: `linear-gradient(to right, #ffffff 0%, #ffffff ${(settings.verticalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) ${(settings.verticalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) 100%)`
+                            }}
+                            onPointerDown={() => {
+                              void window.edge.setInteractive(true)
+                              setSliderActive(true)
+                            }}
+                            onPointerUp={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleSliderRelease(val)
+                            }}
+                            onPointerCancel={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleSliderRelease(val)
+                            }}
+                            onLostPointerCapture={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleSliderRelease(val)
+                            }}
+                            onChange={(e) => {
+                              const raw = parseFloat(e.target.value)
+                              handleSliderInput(raw)
+                            }}
+                          />
 
-                      <div className="setting-slider-ticks">
-                        {Array.from({ length: 21 }, (_, i) => {
-                          const tickVal = i * 0.05
-                          const currentVal = settings.verticalOffset ?? 0.5
-                          const isMajor = i === 0 || i === 10 || i === 20
-                          const isActive = Math.abs(currentVal - tickVal) < 0.025
-                          return (
-                            <span
-                              key={i}
-                              className={`slider-tick${isMajor ? ' major' : ''}${isActive ? ' active' : ''}`}
-                            />
-                          )
-                        })}
+                          <div className="setting-slider-ticks">
+                            {Array.from({ length: 21 }, (_, i) => {
+                              const tickVal = i * 0.05
+                              const currentVal = settings.verticalOffset ?? 0.5
+                              const isMajor = i === 0 || i === 10 || i === 20
+                              const isActive = Math.abs(currentVal - tickVal) < 0.025
+                              return (
+                                <span
+                                  key={i}
+                                  className={`slider-tick${isMajor ? ' major' : ''}${isActive ? ' active' : ''}`}
+                                />
+                              )
+                            })}
+                          </div>
+
+                          <div className="setting-slider-labels">
+                            {[
+                              { label: '0%', val: 0 },
+                              { label: '50%', val: 0.5 },
+                              { label: '100%', val: 1.0 }
+                            ].map((pos) => {
+                              const currentVal = settings.verticalOffset ?? 0.5
+                              const active = Math.abs(currentVal - pos.val) < 0.04
+                              return (
+                                <button
+                                  key={pos.val}
+                                  type="button"
+                                  className={`slider-label-btn${active ? ' active' : ''}`}
+                                  onClick={() => handleSliderRelease(pos.val)}
+                                >
+                                  {pos.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="setting-slider-labels">
-                        {[
-                          { label: '0%', val: 0 },
-                          { label: '50%', val: 0.5 },
-                          { label: '100%', val: 1.0 }
-                        ].map((pos) => {
-                          const currentVal = settings.verticalOffset ?? 0.5
-                          const active = Math.abs(currentVal - pos.val) < 0.04
-                          return (
-                            <button
-                              key={pos.val}
-                              type="button"
-                              className={`slider-label-btn${active ? ' active' : ''}`}
-                              onClick={() => handleSliderRelease(pos.val)}
-                            >
-                              {pos.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                      <div className="setting-divider" />
+                    </>
+                  )}
 
-                  <div className="setting-divider" />
+                  {(settings.stickPosition === 'top' || settings.stickPosition === 'bottom') && (
+                    <>
+                      {/* Horizontal Position Range Slider */}
+                      <div className="setting-row vertical" style={{ gap: 10 }}>
+                        <div className="setting-slider-header">
+                          <div className="setting-info">
+                            <div className="setting-title">{t('position.horizontalPositionTitle')}</div>
+                            <div className="setting-desc">{t('position.horizontalPositionDesc')}</div>
+                          </div>
+                          <div className="setting-slider-val">
+                            {`${Math.round((settings.horizontalOffset ?? 0.5) * 100)}%`}
+                          </div>
+                        </div>
+
+                        <div className="setting-slider-wrap">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.002"
+                            className="setting-range-input"
+                            value={settings.horizontalOffset ?? 0.5}
+                            style={{
+                              background: `linear-gradient(to right, #ffffff 0%, #ffffff ${(settings.horizontalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) ${(settings.horizontalOffset ?? 0.5) * 100}%, rgba(255, 255, 255, 0.12) 100%)`
+                            }}
+                            onPointerDown={() => {
+                              void window.edge.setInteractive(true)
+                              setSliderActive(true)
+                            }}
+                            onPointerUp={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleHorizontalSliderRelease(val)
+                            }}
+                            onPointerCancel={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleHorizontalSliderRelease(val)
+                            }}
+                            onLostPointerCapture={(e) => {
+                              setSliderActive(false)
+                              const val = parseFloat((e.target as HTMLInputElement).value)
+                              handleHorizontalSliderRelease(val)
+                            }}
+                            onChange={(e) => {
+                              const raw = parseFloat(e.target.value)
+                              handleHorizontalSliderInput(raw)
+                            }}
+                          />
+
+                          <div className="setting-slider-ticks">
+                            {Array.from({ length: 21 }, (_, i) => {
+                              const tickVal = i * 0.05
+                              const currentVal = settings.horizontalOffset ?? 0.5
+                              const isMajor = i === 0 || i === 10 || i === 20
+                              const isActive = Math.abs(currentVal - tickVal) < 0.025
+                              return (
+                                <span
+                                  key={i}
+                                  className={`slider-tick${isMajor ? ' major' : ''}${isActive ? ' active' : ''}`}
+                                />
+                              )
+                            })}
+                          </div>
+
+                          <div className="setting-slider-labels">
+                            {[
+                              { label: '0%', val: 0 },
+                              { label: '50%', val: 0.5 },
+                              { label: '100%', val: 1.0 }
+                            ].map((pos) => {
+                              const currentVal = settings.horizontalOffset ?? 0.5
+                              const active = Math.abs(currentVal - pos.val) < 0.04
+                              return (
+                                <button
+                                  key={pos.val}
+                                  type="button"
+                                  className={`slider-label-btn${active ? ' active' : ''}`}
+                                  onClick={() => handleHorizontalSliderRelease(pos.val)}
+                                >
+                                  {pos.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="setting-divider" />
+                    </>
+                  )}
 
                   <div className="setting-row vertical">
                     <div className="setting-info">
@@ -927,33 +1048,37 @@ export function Settings({ inlineIndicatorStyle }: { inlineIndicatorStyle?: bool
                     />
                   </div>
 
-                  <div className="setting-divider" />
+                  {(settings.stickPosition === 'left' || settings.stickPosition === 'right') && (
+                    <>
+                      <div className="setting-divider" />
 
-                  <div className="setting-row vertical">
-                    <div className="setting-info">
-                      <div className="setting-title">{t('position.edgeTriggerPositionTitle')}</div>
-                      <div className="setting-desc">{t('position.edgeTriggerPositionDesc')}</div>
-                    </div>
-                    <div className="setting-pills">
-                      {[
-                        { label: t('position.top'), val: 'top' as const },
-                        { label: t('position.center'), val: 'center' as const },
-                        { label: t('position.bottom'), val: 'bottom' as const }
-                      ].map((opt) => (
-                        <button
-                          key={opt.label}
-                          className={`pill ${(settings.triggerAlignment || 'center') === opt.val ? 'active' : ''}`}
-                          onClick={() => {
-                            playButtonClickSound()
-                            patch({ triggerAlignment: opt.val })
-                            useStore.getState().notifyPositionChanged()
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                      <div className="setting-row vertical">
+                        <div className="setting-info">
+                          <div className="setting-title">{t('position.edgeTriggerPositionTitle')}</div>
+                          <div className="setting-desc">{t('position.edgeTriggerPositionDesc')}</div>
+                        </div>
+                        <div className="setting-pills">
+                          {[
+                            { label: t('position.top'), val: 'top' as const },
+                            { label: t('position.center'), val: 'center' as const },
+                            { label: t('position.bottom'), val: 'bottom' as const }
+                          ].map((opt) => (
+                            <button
+                              key={opt.label}
+                              className={`pill ${(settings.triggerAlignment || 'center') === opt.val ? 'active' : ''}`}
+                              onClick={() => {
+                                playButtonClickSound()
+                                patch({ triggerAlignment: opt.val })
+                                useStore.getState().notifyPositionChanged()
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div className="setting-divider" />
 

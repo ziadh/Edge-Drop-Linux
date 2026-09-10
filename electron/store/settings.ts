@@ -18,8 +18,17 @@ function merge(base: Settings, patch: Partial<Settings>): Settings {
   out.historyLimit = Math.min(2000, Math.max(50, Math.round(out.historyLimit)))
   out.autoDeleteHours = Math.max(0, Number(out.autoDeleteHours) || 0)
   out.verticalOffset = Math.min(1.0, Math.max(0.0, typeof out.verticalOffset === 'number' ? out.verticalOffset : 0.5))
+  out.horizontalOffset = Math.min(1.0, Math.max(0.0, typeof out.horizontalOffset === 'number' ? out.horizontalOffset : 0.5))
   if (out.uiStyle !== 'modern' && out.uiStyle !== 'compact') {
     out.uiStyle = 'modern'
+  }
+  if (
+    out.stickPosition !== 'left' &&
+    out.stickPosition !== 'right' &&
+    out.stickPosition !== 'top' &&
+    out.stickPosition !== 'bottom'
+  ) {
+    out.stickPosition = 'left'
   }
   if (out.triggerAlignment !== 'top' && out.triggerAlignment !== 'center' && out.triggerAlignment !== 'bottom') {
     out.triggerAlignment = 'center'

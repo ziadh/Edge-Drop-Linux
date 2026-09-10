@@ -8,6 +8,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store/appStore'
 import { LiquidOctopusLoader } from './LiquidOctopusLoader'
+import { computePanelBand } from '../lib/panelGeometry'
 
 export function TickIndicatorIcon({
   fillColor = '#ffffff',
@@ -230,11 +231,17 @@ export function CopyIndicatorCurve() {
   const open = useStore((s) => s.open)
   const settings = useStore((s) => s.settings)
   const isRight = settings.stickPosition === 'right'
+  const isBottom = settings.stickPosition === 'bottom'
+  const axis: 'x' | 'y' = (settings.stickPosition === 'top' || settings.stickPosition === 'bottom') ? 'y' : 'x'
   const indicatorStyle = settings.copyIndicatorStyle || 'logo'
 
-  // Spans the full height of the hover bar trigger zone
-  const triggerHeightPx = window.innerHeight * (settings.hotZoneHeight || 0.25)
-  const H = triggerHeightPx
+  // Spans the full length of the hover bar trigger zone, along whichever
+  // screen dimension matches the stuck edge's length axis.
+  const triggerLengthPx = axis === 'x'
+    ? window.innerHeight * (settings.hotZoneHeight || 0.25)
+    : window.innerWidth * (settings.hotZoneHeight || 0.25)
+  const H = triggerLengthPx
+  const W = triggerLengthPx
   const bulge = 48
   const boxW = 75
 
@@ -247,48 +254,74 @@ export function CopyIndicatorCurve() {
   const curvePathRight = `M ${boxW},0 L ${boxW - hw},0 C ${boxW - hw},${H * 0.22} ${boxW - bulge},${H * 0.28} ${boxW - bulge},${H / 2} C ${boxW - bulge},${H * 0.72} ${boxW - hw},${H * 0.78} ${boxW - hw},${H} L ${boxW},${H} Z`
   const flatPathRight = `M ${boxW},0 L ${boxW - hw},0 C ${boxW - hw},${H * 0.22} ${boxW - hw},${H * 0.28} ${boxW - hw},${H / 2} C ${boxW - hw},${H * 0.72} ${boxW - hw},${H * 0.78} ${boxW - hw},${H} L ${boxW},${H} Z`
 
-  const activePath = isRight ? curvePathRight : curvePathLeft
-  const flatPath = isRight ? flatPathRight : flatPathLeft
+  // 90°-rotated (X<->Y swapped) mirrors of the paths above, for a top/bottom
+  // (horizontal) trigger band: the curve bulges vertically instead of
+  // horizontally, sweeping across W (the band's width) instead of H.
+  const curvePathTop = `M 0,0 L 0,${hw} C ${W * 0.22},${hw} ${W * 0.28},${bulge} ${W / 2},${bulge} C ${W * 0.72},${bulge} ${W * 0.78},${hw} ${W},${hw} L ${W},0 Z`
+  const flatPathTop = `M 0,0 L 0,${hw} C ${W * 0.22},${hw} ${W * 0.28},${hw} ${W / 2},${hw} C ${W * 0.72},${hw} ${W * 0.78},${hw} ${W},${hw} L ${W},0 Z`
+
+  const curvePathBottom = `M 0,${boxW} L 0,${boxW - hw} C ${W * 0.22},${boxW - hw} ${W * 0.28},${boxW - bulge} ${W / 2},${boxW - bulge} C ${W * 0.72},${boxW - bulge} ${W * 0.78},${boxW - hw} ${W},${boxW - hw} L ${W},${boxW} Z`
+  const flatPathBottom = `M 0,${boxW} L 0,${boxW - hw} C ${W * 0.22},${boxW - hw} ${W * 0.28},${boxW - hw} ${W / 2},${boxW - hw} C ${W * 0.72},${boxW - hw} ${W * 0.78},${boxW - hw} ${W},${boxW - hw} L ${W},${boxW} Z`
+
+  const activePath = axis === 'y' ? (isBottom ? curvePathBottom : curvePathTop) : (isRight ? curvePathRight : curvePathLeft)
+  const flatPath = axis === 'y' ? (isBottom ? flatPathBottom : flatPathTop) : (isRight ? flatPathRight : flatPathLeft)
 
   const showCurve = (settings.showCopyIndicator !== false) && copyFlareActive && !open
 
   const screenH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1200
   const pFrac = settings.panelHeight || 0.6
-  const panelH = screenH * pFrac
-  const minY = panelH / 2
-  const maxY = screenH - panelH / 2
   const vOffset = settings.verticalOffset ?? 0.5
-  const midY = minY + vOffset * (maxY - minY)
+  const hOffset = settings.horizontalOffset ?? 0.5
+  const vBand = computePanelBand(screenH, vOffset, pFrac)
+  const hBand = computePanelBand(screenW, hOffset, pFrac)
+  const midY = vBand.mid
+  const midX = hBand.mid
 
   const topOffset = `${midY}px`
+  const leftOffset = `${midX}px`
   const yOffset = '-50%'
+  const xOffset = '-50%'
 
   return (
     <AnimatePresence mode="popLayout">
       {showCurve && (
         <motion.div
           key={`copy-sine-curve-${flareKey}`}
-          className={`copy-curve-container ${isRight ? 'right' : 'left'}`}
+          className={`copy-curve-container ${axis === 'y' ? (isBottom ? 'bottom' : 'top') : (isRight ? 'right' : 'left')}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            position: 'absolute',
-            top: topOffset,
-            y: yOffset,
-            [isRight ? 'right' : 'left']: 0,
-            width: boxW,
-            height: H,
-            pointerEvents: 'none',
-            zIndex: 9999
-          }}
+          style={
+            axis === 'y'
+              ? {
+                  position: 'absolute',
+                  left: leftOffset,
+                  x: xOffset,
+                  [isBottom ? 'bottom' : 'top']: 0,
+                  width: W,
+                  height: boxW,
+                  pointerEvents: 'none',
+                  zIndex: 9999
+                }
+              : {
+                  position: 'absolute',
+                  top: topOffset,
+                  y: yOffset,
+                  [isRight ? 'right' : 'left']: 0,
+                  width: boxW,
+                  height: H,
+                  pointerEvents: 'none',
+                  zIndex: 9999
+                }
+          }
         >
           {/* SVG Sine-Curve Morph with Subpixel Geometric Precision Antialiasing */}
           <svg
-            width={boxW}
-            height={H}
-            viewBox={`0 0 ${boxW} ${H}`}
+            width={axis === 'y' ? W : boxW}
+            height={axis === 'y' ? boxW : H}
+            viewBox={axis === 'y' ? `0 0 ${W} ${boxW}` : `0 0 ${boxW} ${H}`}
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             shapeRendering="geometricPrecision"
@@ -316,27 +349,42 @@ export function CopyIndicatorCurve() {
 
           {/* Selected Copy Indicator Icon (Logo / Tick / Copy) centered inside the Curve Bulge */}
           <motion.div
-            initial={{ scale: 0.3, opacity: 0, x: isRight ? 10 : -10 }}
-            animate={{ scale: 1, opacity: 1, x: 0 }}
-            exit={{ scale: 0.3, opacity: 0, x: isRight ? 10 : -10 }}
+            initial={axis === 'y' ? { scale: 0.3, opacity: 0, y: isBottom ? 10 : -10 } : { scale: 0.3, opacity: 0, x: isRight ? 10 : -10 }}
+            animate={{ scale: 1, opacity: 1, x: 0, y: 0 }}
+            exit={axis === 'y' ? { scale: 0.3, opacity: 0, y: isBottom ? 10 : -10 } : { scale: 0.3, opacity: 0, x: isRight ? 10 : -10 }}
             transition={{
               type: 'spring',
               stiffness: 420,
               damping: 24,
               delay: 0.05
             }}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              y: '-50%',
-              [isRight ? 'right' : 'left']: 2,
-              width: 43.3,
-              height: 43.3,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none'
-            }}
+            style={
+              axis === 'y'
+                ? {
+                    position: 'absolute',
+                    left: '50%',
+                    x: '-50%',
+                    [isBottom ? 'bottom' : 'top']: 2,
+                    width: 43.3,
+                    height: 43.3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none'
+                  }
+                : {
+                    position: 'absolute',
+                    top: '50%',
+                    y: '-50%',
+                    [isRight ? 'right' : 'left']: 2,
+                    width: 43.3,
+                    height: 43.3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none'
+                  }
+            }
           >
             {indicatorStyle === 'check' ? (
               <TickIndicatorIcon fillColor="#ffffff" glowColor="rgba(255, 255, 255, 0.85)" />

@@ -71,7 +71,7 @@ class StickController {
   currentStickDisplayId: number | undefined
   windowBounds: { x: number; y: number } | null = null
   lastProbe: ReturnType<typeof probeStickEdge> | null = null
-  stickPosition: 'left' | 'right' = 'left'
+  stickPosition: 'left' | 'right' | 'top' | 'bottom' = 'left'
   hotZoneWidth = 3
   windowWidth = 384
 
@@ -237,6 +237,65 @@ describe('SIMULATION — vertically stacked secondary', () => {
   })
 })
 
+describe('SIMULATION — top-stick on the primary (Y-axis distance math)', () => {
+  it('triggers only near the TOP edge, using clientY as the distance', () => {
+    const ctl = new StickController(sideBySideDesktop())
+    ctl.stickPosition = 'top'
+    ctl.applyStickDisplay(1)
+
+    const inside = ctl.tick({ x: 500, y: 2 })!
+    expect(inside.inEdge).toBe(true)
+    expect(inside.distFromEdge).toBe(2)
+
+    const outside = ctl.tick({ x: 500, y: 10 })!
+    expect(outside.inEdge).toBe(false)
+
+    // X position is irrelevant for a top-stuck bar's edge distance.
+    expect(ctl.tick({ x: 1, y: 1 })!.inEdge).toBe(true)
+    expect(ctl.tick({ x: 1900, y: 1 })!.inEdge).toBe(true)
+  })
+})
+
+describe('SIMULATION — bottom-stick on the secondary (Y-axis distance math)', () => {
+  it('triggers only at the secondary’s BOTTOM edge with correct distance math', () => {
+    const ctl = new StickController(sideBySideDesktop())
+    ctl.stickPosition = 'bottom'
+    ctl.applyStickDisplay(2)
+
+    // Secondary work area height = 1440 - 40 (taskbar) = 1400.
+    const secBottom = 1400
+    const inside = ctl.tick({ x: 2500, y: secBottom - 2 })!
+    expect(inside.inEdge).toBe(true)
+    expect(inside.distFromEdge).toBe(2)
+
+    const outside = ctl.tick({ x: 2500, y: secBottom - 10 })!
+    expect(outside.inEdge).toBe(false)
+
+    // Primary's bottom edge is far from OUR edge: inert.
+    expect(ctl.tick({ x: 500, y: 1039 })!.inEdge).toBe(false)
+  })
+})
+
+describe('SIMULATION — vertically stacked secondary, bottom-stick seam', () => {
+  it('the primary’s bottom-stuck bar detects its own edge and stays inert on the neighbor below', () => {
+    const desktop = new VirtualDesktop([
+      display(1, 0, 0, 1920, 1080, true),
+      display(2, 0, 1080, 1920, 1440) // directly BELOW the primary
+    ])
+    const ctl = new StickController(desktop)
+    ctl.stickPosition = 'bottom'
+    ctl.applyStickDisplay(1)
+
+    // Primary work area height = 1080 - 40 = 1040.
+    const p = ctl.tick({ x: 1, y: 1038 })!
+    expect(p.inEdge).toBe(true)
+    expect(p.distFromEdge).toBe(2)
+
+    // Deep inside the neighbor below: inert.
+    expect(ctl.tick({ x: 1, y: 1200 })!.inEdge).toBe(false)
+  })
+})
+
 describe('SIMULATION — live topology changes', () => {
   it('monitor physically relocated: OS event refreshes cache, new coordinates detect', () => {
     const desktop = sideBySideDesktop()
@@ -333,7 +392,7 @@ describe('SIMULATION — adaptive proximity thresholds (unchanged feel)', () => 
 /* ------------------------------------------------------------------ */
 
 const SEC_X = 1920
-function seamController(stickPosition: 'left' | 'right' = 'left') {
+function seamController(stickPosition: 'left' | 'right' | 'top' | 'bottom' = 'left') {
   const ctl = new StickController(sideBySideDesktop())
   ctl.stickPosition = stickPosition
   ctl.applyStickDisplay(2)
@@ -447,6 +506,67 @@ describe('SEAM POLICY - outer-edge parity (single display, no neighbor)', () => 
     seq.forEach((x, i) => {
       t += 16
       const r = probeSeamAware({ cursor: { x, y: 300 }, workArea: wa, stickPosition: 'left', hotZoneWidth: 3, now: t }, state)
+      state = r.nextState
+      if (r.crossedNow) sawCrossing = true
+      if (r.lockedOut) sawLockout = true
+      if (r.armedInEdge && armedAtFrame === -1) armedAtFrame = i
+    })
+    expect(sawCrossing).toBe(false)
+    expect(sawLockout).toBe(false)
+    expect(armedAtFrame).toBeGreaterThanOrEqual(0)
+    expect(armedAtFrame).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('SEAM POLICY - outer-edge parity, top/bottom (single display, no neighbor)', () => {
+  it('top-stuck: hardware edge clamps cursor along Y, prompt arming, zero crossings/lockouts', () => {
+    const desktop = new VirtualDesktop([display(1, 0, 0, 1920, 1080, true)])
+    const cache = new WorkAreaCache((id) => {
+      const all = desktop.getAllDisplays()
+      const s = all.find(d => d.id === id) ?? desktop.getPrimaryDisplay()
+      return { displayId: s.id, workArea: s.workArea }
+    })
+    const wa = cache.get(1)!
+    let state: SeamTickState = {}
+    let t = 1000
+    let sawCrossing = false
+    let sawLockout = false
+
+    const seq = [400, 120, 30, 4, 0, 0, 0, 0, 0, 0]
+    let armedAtFrame = -1
+    seq.forEach((y, i) => {
+      t += 16
+      const r = probeSeamAware({ cursor: { x: 300, y }, workArea: wa, stickPosition: 'top', hotZoneWidth: 3, now: t }, state)
+      state = r.nextState
+      if (r.crossedNow) sawCrossing = true
+      if (r.lockedOut) sawLockout = true
+      if (r.armedInEdge && armedAtFrame === -1) armedAtFrame = i
+    })
+    expect(sawCrossing).toBe(false)
+    expect(sawLockout).toBe(false)
+    expect(armedAtFrame).toBeGreaterThanOrEqual(0)
+    expect(armedAtFrame).toBeLessThanOrEqual(5)
+  })
+
+  it('bottom-stuck: hardware edge clamps cursor along Y, prompt arming, zero crossings/lockouts', () => {
+    const desktop = new VirtualDesktop([display(1, 0, 0, 1920, 1080, true)])
+    const cache = new WorkAreaCache((id) => {
+      const all = desktop.getAllDisplays()
+      const s = all.find(d => d.id === id) ?? desktop.getPrimaryDisplay()
+      return { displayId: s.id, workArea: s.workArea }
+    })
+    const wa = cache.get(1)! // workArea.height = 1040
+    let state: SeamTickState = {}
+    let t = 1000
+    let sawCrossing = false
+    let sawLockout = false
+
+    // Descending distance-from-bottom sequence, mirroring the top-stuck one.
+    const seq = [640, 920, 1010, 1036, 1040, 1040, 1040, 1040, 1040, 1040]
+    let armedAtFrame = -1
+    seq.forEach((y, i) => {
+      t += 16
+      const r = probeSeamAware({ cursor: { x: 300, y }, workArea: wa, stickPosition: 'bottom', hotZoneWidth: 3, now: t }, state)
       state = r.nextState
       if (r.crossedNow) sawCrossing = true
       if (r.lockedOut) sawLockout = true

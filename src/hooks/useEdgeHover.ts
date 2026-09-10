@@ -74,6 +74,9 @@ export function useEdgeHover(): void {
 
   // Hot zone and panel bounds, recomputed on resize to avoid reading DOM at 1000Hz
   const zone = useRef({ top: 0, bottom: 0, midY: 0, panelHalfH: 0 })
+  // Horizontal-axis mirror of `zone`, used when stickPosition is 'top'/'bottom'
+  // (a horizontal bar) instead of 'left'/'right' (a vertical blade).
+  const zoneX = useRef({ left: 0, right: 0, midX: 0, panelHalfW: 0 })
 
   // Last known pointer position (updated on every pointermove). Used to vet
   // `panel:leave` events — Framer Motion layout reflows can fire spurious
@@ -108,11 +111,31 @@ export function useEdgeHover(): void {
       }
 
       const panelHalfH = panelH / 2 + 24
-      zone.current = { 
-        top, 
+      zone.current = {
+        top,
         bottom,
         midY,
         panelHalfH
+      }
+
+      // ── horizontal-axis mirror (used for stickPosition 'top'/'bottom') ──
+      // triggerAlignment only describes alignment along a vertical edge, so
+      // for a horizontal bar the trigger band always stays centered.
+      const w = window.innerWidth
+      const panelW = w * pFrac
+      const minX = panelW / 2
+      const maxX = w - panelW / 2
+      const hOffset = s.horizontalOffset ?? 0.5
+      const midX = minX + hOffset * (maxX - minX)
+      const triggerW = Math.min(panelW, w * (s.hotZoneHeight || 0.25))
+      const left = midX - triggerW / 2
+      const right = midX + triggerW / 2
+      const panelHalfW = panelW / 2 + 24
+      zoneX.current = {
+        left,
+        right,
+        midX,
+        panelHalfW
       }
     }
     recompute()
@@ -122,6 +145,7 @@ export function useEdgeHover(): void {
         state.settings.panelHeight !== prevState.settings.panelHeight ||
         state.settings.hotZoneHeight !== prevState.settings.hotZoneHeight ||
         state.settings.verticalOffset !== prevState.settings.verticalOffset ||
+        state.settings.horizontalOffset !== prevState.settings.horizontalOffset ||
         state.settings.triggerAlignment !== prevState.settings.triggerAlignment
       ) {
         recompute()
@@ -258,6 +282,30 @@ export function useEdgeHover(): void {
       const hasFlyout = !!(state.previewItemId || state.styleFlyoutOpen)
       const currentPanelWide = hasFlyout ? PREVIEW_WIDE : PANEL_WIDE
 
+      if (s.stickPosition === 'top' || s.stickPosition === 'bottom') {
+        let insideY = false
+        if (s.stickPosition === 'bottom') {
+          insideY = y >= window.innerHeight - currentPanelWide - BUFFER_PX && y <= window.innerHeight + BUFFER_PX
+        } else {
+          insideY = y >= -BUFFER_PX && y <= currentPanelWide + BUFFER_PX
+        }
+        if (!insideY) return false
+
+        const inPreviewCol = s.stickPosition === 'bottom'
+          ? y < window.innerHeight - KEEP_OPEN_PX
+          : y > KEEP_OPEN_PX
+
+        if (inPreviewCol && hasFlyout && state.previewFlyoutRect) {
+          const FLYOUT_BUFFER = 24
+          // previewFlyoutRect's {top,bottom} fields mean {left,right} for a
+          // horizontal-axis flyout — see PreviewFlyout.tsx/IndicatorStyleFlyout.tsx.
+          return x >= state.previewFlyoutRect.top - FLYOUT_BUFFER && x <= state.previewFlyoutRect.bottom + FLYOUT_BUFFER
+        }
+
+        const { midX, panelHalfW } = zoneX.current
+        return x >= midX - panelHalfW && x <= midX + panelHalfW
+      }
+
       let insideX = false
       if (s.stickPosition === 'right') {
         insideX = x >= window.innerWidth - currentPanelWide - BUFFER_PX && x <= window.innerWidth + BUFFER_PX
@@ -313,8 +361,9 @@ export function useEdgeHover(): void {
     const unsubCursorEdge = window.edge.onCursorEdge((data) => {
       lastClient.current = { x: data.x, y: data.y }
       const state = useStore.getState()
-      const { stickPosition, displayWidth } = data
+      const { stickPosition, displayWidth, displayHeight } = data
       const { top, bottom, midY, panelHalfH } = zone.current
+      const { left: zLeft, right: zRight, midX, panelHalfW } = zoneX.current
       const hasFlyout = !!(state.previewItemId || state.styleFlyoutOpen)
       const currentKeepOpenPx = hasFlyout ? PREVIEW_WIDE - 15 : KEEP_OPEN_PX
       const currentStartClosePx = hasFlyout ? PREVIEW_WIDE + 20 : START_CLOSE_PX
@@ -377,6 +426,130 @@ export function useEdgeHover(): void {
           }
 
           if (distFromRight > currentStartClosePx || distFromRight < -BUFFER_PX || !insideY) {
+            scheduleClose()
+          }
+          break
+        }
+
+        case 'bottom': {
+          const distFromBottom = displayHeight - data.y
+          const inEdgeNear = distFromBottom >= -BUFFER_PX && distFromBottom <= (TRIGGER_PX + 25)
+          const inZone = data.x >= zLeft && data.x <= zRight
+
+          if (!inEdgeNear) {
+            edgeHintFired = false
+          }
+
+          const isHoverEnabled = state.settings.hoverActivation ?? true
+
+          if (inEdgeNear && !inZone && !state.open && isHoverEnabled && (state.settings.showEdgeLocationHint ?? false)) {
+            triggerEdgeHint()
+          }
+
+          if (distFromBottom >= -BUFFER_PX && distFromBottom <= TRIGGER_PX && inZone && !state.open && isHoverEnabled) {
+            if (state.edgeHintActive) state.setEdgeHintActive(false)
+            cancelClose()
+            if (dwellTimer === undefined) {
+              dwellTimer = window.setTimeout(() => {
+                dwellTimer = undefined
+                openPanel()
+              }, DWELL_MS)
+            }
+            return
+          }
+
+          if (dwellTimer !== undefined) {
+            window.clearTimeout(dwellTimer)
+            dwellTimer = undefined
+          }
+
+          if (!state.open) return
+
+          if (state.edgeHintActive) state.setEdgeHintActive(false)
+
+          const now = Date.now()
+          if (now - lastSetInteractiveRef.current > 2000) {
+            lastSetInteractiveRef.current = now
+            edge.setInteractive(true)
+          }
+
+          const inPreviewColumn = distFromBottom > KEEP_OPEN_PX
+          let insideX = false
+          if (inPreviewColumn && hasFlyout && state.previewFlyoutRect) {
+            const FLYOUT_BUFFER = 24
+            // previewFlyoutRect's {top,bottom} fields mean {left,right} here.
+            insideX = data.x >= state.previewFlyoutRect.top - FLYOUT_BUFFER && data.x <= state.previewFlyoutRect.bottom + FLYOUT_BUFFER
+          } else {
+            insideX = data.x >= midX - panelHalfW && data.x <= midX + panelHalfW
+          }
+
+          if (distFromBottom >= -BUFFER_PX && distFromBottom <= currentKeepOpenPx && insideX) {
+            cancelClose()
+            return
+          }
+
+          if (distFromBottom > currentStartClosePx || distFromBottom < -BUFFER_PX || !insideX) {
+            scheduleClose()
+          }
+          break
+        }
+
+        case 'top': {
+          const inEdgeNear = data.y >= -BUFFER_PX && data.y <= (TRIGGER_PX + 25)
+          const inZone = data.x >= zLeft && data.x <= zRight
+
+          if (!inEdgeNear) {
+            edgeHintFired = false
+          }
+
+          const isHoverEnabled = state.settings.hoverActivation ?? true
+
+          if (inEdgeNear && !inZone && !state.open && isHoverEnabled && (state.settings.showEdgeLocationHint ?? false)) {
+            triggerEdgeHint()
+          }
+
+          if (data.y >= -BUFFER_PX && data.y <= TRIGGER_PX && inZone && !state.open && isHoverEnabled) {
+            if (state.edgeHintActive) state.setEdgeHintActive(false)
+            cancelClose()
+            if (dwellTimer === undefined) {
+              dwellTimer = window.setTimeout(() => {
+                dwellTimer = undefined
+                openPanel()
+              }, DWELL_MS)
+            }
+            return
+          }
+
+          if (dwellTimer !== undefined) {
+            window.clearTimeout(dwellTimer)
+            dwellTimer = undefined
+          }
+
+          if (!state.open) return
+
+          if (state.edgeHintActive) state.setEdgeHintActive(false)
+
+          const now = Date.now()
+          if (now - lastSetInteractiveRef.current > 2000) {
+            lastSetInteractiveRef.current = now
+            edge.setInteractive(true)
+          }
+
+          const inPreviewColumn = data.y > KEEP_OPEN_PX
+          let insideX = false
+          if (inPreviewColumn && hasFlyout && state.previewFlyoutRect) {
+            const FLYOUT_BUFFER = 24
+            insideX = data.x >= state.previewFlyoutRect.top - FLYOUT_BUFFER && data.x <= state.previewFlyoutRect.bottom + FLYOUT_BUFFER
+          } else {
+            insideX = data.x >= midX - panelHalfW && data.x <= midX + panelHalfW
+          }
+
+          if (data.y >= -BUFFER_PX && data.y <= currentKeepOpenPx && insideX) {
+            cancelClose()
+            return
+          }
+
+          if (data.y > currentStartClosePx || data.y < -BUFFER_PX || !insideX) {
             scheduleClose()
           }
           break
